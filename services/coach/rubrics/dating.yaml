@@ -1,0 +1,62 @@
+# 소개팅 코칭 루브릭
+# 1:1 대면, 편안함·미소·여유·자연스러움 중심. 발표체/면접체는 감점.
+# "물 따를 때 동작이 빠르고 컵 잡기 전 짧은 망설임 반복" 같은 미시 행동에 가중.
+
+id: dating
+display_name: "소개팅 코칭"
+description: "1:1 대면 대화 — 편안함·자연스러움·미소·여유 중심"
+audience_perspective: |
+  소개팅 자리 코치 관점. "이 사람과 다음 만남이 잡힐 만한가?"라는 질문에 답하는 톤.
+  딱딱한 발표체나 면접체는 거리감 신호로 감점.
+  코칭 문장 예시: "물을 따르는 장면에서 손동작이 빠르고 컵 잡기 전 짧은 망설임이 반복되어
+  다소 긴장한 인상을 줄 수 있습니다. 동작을 0.5초 정도 늦추고 상대를 한 번 바라본 뒤
+  자연스럽게 권하면 여유 있어 보입니다." 처럼 *구체적 행동 + 인상 영향 + 처방* 3박자.
+
+axes:
+  logic:
+    weight: 0.5
+    text: |
+      대화 흐름의 자연스러움 (꼬리 잇기 / 질문-답 균형). 면접식 일방 답변보다는
+      "받고 → 짧은 의견 → 되묻기" 패턴이 좋음.
+
+  delivery:
+    weight: 0.95
+    text: |
+      말투의 자연스러움 — 발표체("~하였습니다") 감점, 친근체("~해요/~예요") 중립.
+      WPM 100~150 적정 (발표보다 느림). pause 1~3초는 여유의 신호.
+      말끝 흐림은 자신감 부족으로 비침.
+
+  gaze:
+    weight: 0.95
+    text: |
+      적당한 eye contact — 0.6~0.8 권장 (너무 강하면 부담, 너무 적으면 무관심).
+      `gaze_downward`는 부끄러움/회피로 비침.
+      `gaze_wander` (시선 좌우 산만)는 안절부절 인상.
+
+  posture:
+    weight: 0.9
+    text: |
+      안정된 자세 + 약간 앞으로 기울임이 관심 신호.
+      `face_touch`, `hand_fidget`, `chin_on_hand`는 모두 부정 — 긴장 신호로 비침.
+      `motion_hesitation`(이중동작)도 자신감 결여로.
+
+  expression:
+    weight: 1.0
+    text: |
+      *미소가 가장 결정적*. `low_smile` 지속은 거리감/무관심으로 직결.
+      `expression_change_rate` 풍부 = 감정 교류 활발. 무표정 지속 강한 감점.
+
+# 시나리오별 이벤트 심각도 — 같은 detector도 dating에선 더 무겁게 본다.
+event_kind_emphasis:
+  low_smile: blunder              # 소개팅에서 무미소는 치명적
+  hand_fidget: mistake            # 안절부절은 긴장 인상
+  motion_hesitation: mistake      # 이중동작 = 우유부단
+  face_touch: mistake             # 코·머리 만지기 = 안절부절
+  chin_on_hand: blunder           # 턱 괴기는 무례
+  gesture_excessive: mistake      # 과한 손동작 부담
+  gaze_downward: mistake          # 시선 아래는 회피로 비침
+  expression_flat: blunder        # 무표정 강한 감점
+  gaze_wander: inaccuracy
+  silence_long: inaccuracy        # 어색한 침묵이긴 하지만 1:1에선 흔함
+
+top_priority_count: 3

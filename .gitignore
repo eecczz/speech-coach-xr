@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Env
+.env
+.env.local
+
+# Claude Code personal local settings
+.claude/settings.local.json
+
+# Node
+node_modules/
+.next/
+dist/
+
+# PoC outputs
+*.transcript.json
+services/audio-pipeline/samples/*
+!services/audio-pipeline/samples/.gitkeep
+
+# External reference repos (cloned read-only)
+reference/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

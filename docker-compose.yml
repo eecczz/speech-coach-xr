@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: presentation-coach-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-speakup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-speakup}
+      POSTGRES_DB: ${POSTGRES_DB:-speakup}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-speakup} -d ${POSTGRES_DB:-speakup}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  audio:
+    build: ./services/audio-pipeline
+    container_name: presentation-coach-audio
+    ports:
+      - "8000:8000"
+    environment:
+      STT_PROVIDER: ${STT_PROVIDER:-local}
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      WHISPER_DEVICE: auto       # auto|cuda|cpu
+      WHISPER_COMPUTE_TYPE: auto # auto|float16|int8|float32
+      JEONBUK_API_KEY: ${JEONBUK_API_KEY:-}
+      JEONBUK_BASE_URL: ${JEONBUK_BASE_URL:-https://ai.jb.go.kr/student-api/v1}
+      JEONBUK_STT_MODEL: ${JEONBUK_STT_MODEL:-cohere-transcribe}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://speakup:speakup@postgres:5432/speakup}
+    volumes:
+      # 모델 캐시 영속화 (재시작마다 8GB 재다운로드 방지)
+      - whisper-cache:/root/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # GPU 사용 시 주석 해제 + NVIDIA Container Toolkit 설치 (Windows: WSL2 + nvidia-container-toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  aggregator:
+    build:
+      context: .
+      dockerfile: services/aggregator/Dockerfile
+    container_name: presentation-coach-aggregator
+    ports:
+      - "8001:8001"
+    environment:
+      COACH_URL: http://coach:8002
+    depends_on:
+      - coach
+
+  coach:
+    build:
+      context: .
+      dockerfile: services/coach/Dockerfile
+    container_name: presentation-coach-coach
+    ports:
+      - "8002:8002"
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}      # jeonbuk | gemini | claude
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      JEONBUK_API_KEY: ${JEONBUK_API_KEY:-}
+      JEONBUK_BASE_URL: ${JEONBUK_BASE_URL:-https://ai.jb.go.kr/student-api/v1}
+      JEONBUK_CHAT_MODEL: ${JEONBUK_CHAT_MODEL:-gemma-4-31b-turbo}
+
+volumes:
+  whisper-cache:
+  postgres-data:

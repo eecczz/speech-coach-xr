@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>코칭 준비 중 - SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      document.documentElement.dataset.theme = savedTheme || 'light';
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
+  </head>
+  <body>
+    <main class="container app-shell page-center">
+      <section class="screen loading-panel">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-badge">S</div>
+            <div class="brand-copy">
+              <strong>SpeakUp</strong>
+              <span>AI 코칭 준비 중</span>
+            </div>
+          </div>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
+
+        <section class="progress-steps" aria-label="진행 단계">
+          <span>1 준비</span>
+          <span>2 연습</span>
+          <span class="is-current">3 코칭</span>
+        </section>
+
+        <div class="page-heading">
+          <h1>분석 흐름을 차분히 정리하고 있어요.</h1>
+          <p>단계가 순서대로 진행되면 곧 코칭 화면으로 이어집니다.</p>
+        </div>
+
+        <div id="steps" class="loading-stack"></div>
+        <p class="loading-note">잠깐! 분석이 끝날 때까지 창을 열어주세요.</p>
+      </section>
+    </main>
+    <script type="module" src="/src/loading.ts"></script>
+  </body>
+</html>

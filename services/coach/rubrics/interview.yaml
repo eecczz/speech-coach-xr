@@ -1,0 +1,61 @@
+# 면접 코칭 루브릭
+# 1:1 또는 패널 면접 — 자신감·답변 구조·진실성·페이스 중심.
+
+id: interview
+display_name: "면접 코칭"
+description: "1:1 또는 패널 면접 — 자신감·답변 구조·신뢰성 중심"
+audience_perspective: |
+  면접관 관점에서 평가. "이 사람을 뽑을 만한가?"라는 질문에 답하는 톤.
+  자신감, 답변 명료성, 신뢰성을 우선 본다. 칭찬 인플레이션 금지.
+
+axes:
+  logic:
+    weight: 1.0
+    text: |
+      답변 구조 — 질문에 직접 답 → 근거 → 사례(STAR 기법) → 마무리.
+      `full_transcript` 근거. 두서없는 답변·결론 빠진 답변·질문 회피 모두 감점.
+      transcript 비어있으면 "N/A — transcript 미수집".
+
+  delivery:
+    weight: 0.9
+    text: |
+      답변 페이스. 너무 빠르면 불안·외운 인상, 너무 느리면 자신감 부족.
+      - 적정 WPM: 120-160 (발표보다 약간 느림)
+      - filler 권장: 분당 ≤7회 (발표보다 관대 — 면접은 즉답이므로)
+      - pause는 신중함 신호 — 1~3초 pause는 긍정. 4초+는 답변 막힘.
+
+  gaze:
+    weight: 1.0
+    text: |
+      면접관과의 eye contact는 면접에서 가장 결정적 신호.
+      - 정면 응시율 0.8+ 권장 (발표보다 엄격)
+      - `gaze_downward` 다수 = "준비한 답변 외우는 인상" — 강한 감점
+
+  posture:
+    weight: 1.0
+    text: |
+      자신감 신호. 어깨 펴기, 머리 곧게, 안정된 자세 유지.
+      - chin_on_hand는 면접에서 절대 금지 — 한 번이라도 -2점
+      - head_tilt_sustained는 우유부단·소극적 인상
+
+  expression:
+    weight: 0.85
+    text: |
+      적당한 미소 + 진지함의 균형. expression_flat은 면접에서 큰 감점(무뚝뚝/경직).
+      과한 표정도 부정(가벼운 인상).
+
+event_kind_emphasis:
+  chin_on_hand: blunder
+  head_tilt_sustained: blunder        # 면접에선 자신감 결여로 더 심각
+  gaze_downward: blunder              # 면접관 안 보고 아래만 = 치명
+  head_nodding: mistake               # 긴장성 끄덕임 — 면접 부정
+  gesture_excessive: mistake          # 면접에선 차분함이 중요
+  expression_flat: mistake
+  # Domain-expansion — 면접에서 안절부절/망설임은 자신감 부족의 가장 강한 신호.
+  face_touch: blunder                 # 면접 중 코·머리 만지기 = 치명적 긴장 신호
+  hand_fidget: blunder                # 손 만지작 = 명백한 불안
+  motion_hesitation: blunder          # 이중동작 = 답변 자신감 결여
+  gaze_wander: blunder                # 면접관에 집중 못 함
+  low_smile: inaccuracy               # 면접은 진지해도 OK (무표정만 아니면)
+
+top_priority_count: 3

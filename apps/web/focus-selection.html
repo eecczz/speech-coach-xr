@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>집중 포커스 선택 - SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      document.documentElement.dataset.theme = savedTheme || 'light';
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
+  </head>
+  <body>
+    <main class="container app-shell page-center">
+      <section class="screen single-column" style="width:min(560px,100%);">
+        <div class="topbar app-nav">
+          <a class="brand" href="create-project.html" aria-label="SpeakUp 프로젝트">
+            <div class="brand-badge">S</div>
+            <div class="brand-copy">
+              <strong>SpeakUp</strong>
+              <span>집중 포커스 선택</span>
+            </div>
+          </a>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
+
+        <section class="progress-steps" aria-label="진행 단계">
+          <span>1 프로젝트</span>
+          <span>2 상황 입력</span>
+          <span class="is-current">3 포커스 선택</span>
+        </section>
+
+        <div class="page-heading">
+          <h1>이번 연습에서 무엇에 집중할까요?</h1>
+          <p id="project-context"></p>
+        </div>
+
+        <div class="field">
+          <strong>집중 포커스</strong>
+          <div class="chip-group" id="focus-chip-group">
+            <label class="chip"><input type="checkbox" value="시선 처리" /><span class="chip-check">✓</span>시선 처리</label>
+            <label class="chip"><input type="checkbox" value="발화 속도" /><span class="chip-check">✓</span>발화 속도</label>
+            <label class="chip"><input type="checkbox" value="반복 표현" /><span class="chip-check">✓</span>반복 표현</label>
+            <label class="chip"><input type="checkbox" value="발표 구조" /><span class="chip-check">✓</span>발표 구조</label>
+            <label class="chip"><input type="checkbox" value="자신감" /><span class="chip-check">✓</span>자신감</label>
+          </div>
+        </div>
+
+        <div class="actions vertical">
+          <button id="btn-start" class="btn btn-primary">연습 시작하기 <i class="ti ti-arrow-right" aria-hidden="true"></i></button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const focusChipGroup = document.getElementById('focus-chip-group');
+      const projectContext = document.getElementById('project-context');
+      const params = new URLSearchParams(location.search);
+      const currentProjectId = params.get('projectId') || localStorage.getItem('speakup-current-project-id') || '';
+      const projects = JSON.parse(localStorage.getItem('speakup-projects') || '[]');
+      const currentProject = projects.find((project) => project.id === currentProjectId);
+
+      if (!currentProject) {
+        location.href = 'create-project.html';
+      }
+
+      if (projectContext && currentProject) {
+        localStorage.setItem('speakup-current-project-id', currentProject.id);
+        localStorage.setItem('speakup-project-name', currentProject.name);
+        projectContext.textContent = `${currentProject.name}에 맞는 포커스를 골라주세요.`;
+      }
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      function getSelectedFocus() {
+        return Array.from(focusChipGroup.querySelectorAll('input:checked')).map((input) => input.value);
+      }
+
+      function renderSelectedFocus() {
+        focusChipGroup.querySelectorAll('.chip').forEach((label) => {
+          const input = label.querySelector('input');
+          label.classList.toggle('is-selected', input.checked);
+        });
+        localStorage.setItem('speakup-focus-goals', JSON.stringify(getSelectedFocus()));
+      }
+
+      const savedGoals = JSON.parse(localStorage.getItem('speakup-focus-goals') || '[]');
+      focusChipGroup.querySelectorAll('input').forEach((input) => {
+        input.checked = savedGoals.includes(input.value);
+      });
+
+      focusChipGroup.addEventListener('change', renderSelectedFocus);
+
+      document.getElementById('btn-start').addEventListener('click', () => {
+        const project = currentProject?.name || localStorage.getItem('speakup-project-name') || '오늘의 말하기 연습';
+        const situation = localStorage.getItem('speakup-practice-situation') || '자유 연습';
+        const goals = getSelectedFocus();
+        const next = new URL('practice.html', location.href);
+        if (currentProjectId) next.searchParams.set('projectId', currentProjectId);
+        next.searchParams.set('project', project);
+        next.searchParams.set('type', 'free');
+        next.searchParams.set('scenario', 'presentation');
+        next.searchParams.set('situation', situation);
+        next.searchParams.set('goal', goals.join(', ') || '시선 처리');
+        location.href = next.toString();
+      });
+
+      syncThemeToggle();
+      renderSelectedFocus();
+    </script>
+  </body>
+</html>

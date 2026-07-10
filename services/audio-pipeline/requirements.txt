@@ -1,0 +1,10 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+faster-whisper>=1.0.0
+openai>=1.0.0
+# Phase 2 prosody — F0, intensity, end-energy. librosa pulls numpy/scipy/numba
+# (already pulled in by faster-whisper transitively for most, so small delta).
+librosa>=0.10.0
+soundfile>=0.12.0
+psycopg[binary]>=3.2.0

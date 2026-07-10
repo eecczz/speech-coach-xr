@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI agent 세션 - SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      document.documentElement.dataset.theme = savedTheme || 'light';
+      // Tag <html> so body+html height locks fire together. Selector
+      // approaches with :has() get inconsistent across browsers — a literal
+      // class is the safe bet.
+      document.documentElement.classList.add('agent-session-shell');
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
+  </head>
+  <body class="agent-session-page">
+    <main id="practice-root" class="agent-session-shell">
+      <header class="agent-topbar">
+        <a class="brand" href="index.html" aria-label="SpeakUp 홈">
+          <div class="brand-badge">S</div>
+          <div class="brand-copy">
+            <strong id="page-title">오늘의 말하기 연습</strong>
+            <span id="session-context">AI agent 세션</span>
+          </div>
+        </a>
+        <div class="agent-topbar-actions">
+          <button type="button" class="btn icon-btn sidebar-toggle" id="left-sidebar-toggle" aria-label="세션 사이드바 접기" title="세션 사이드바"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+          <button type="button" class="btn icon-btn sidebar-toggle" id="right-sidebar-toggle" aria-label="AI agent 사이드바 접기" title="AI agent 사이드바"><i class="ti ti-layout-sidebar-right-collapse"></i></button>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
+      </header>
+
+      <section class="agent-grid" id="agent-grid">
+        <aside class="agent-sidebar left" id="session-sidebar">
+          <div class="agent-sidebar-head">
+            <strong>세션 목록</strong>
+            <a class="btn btn-ghost" href="create-project.html">새 세션</a>
+          </div>
+          <div class="agent-session-list" id="agent-session-list">
+            <p>저장된 세션을 불러오는 중입니다.</p>
+          </div>
+        </aside>
+
+        <section class="agent-center">
+          <section class="agent-session-statusbar">
+            <section class="progress-steps" aria-label="진행 단계">
+              <span>1 준비</span>
+              <span class="is-current">2 세션</span>
+              <span>3 리포트</span>
+            </section>
+
+            <div class="live-coach-toast" id="live-coach-toast" hidden aria-live="polite">
+              <span id="live-coach-time">00:00</span>
+              <strong id="live-coach-message">실시간 코칭</strong>
+            </div>
+          </section>
+
+          <section class="screen practice-main-panel">
+            <div class="practice-agent-head">
+              <span class="mini-pill is-strong">실시간 코칭</span>
+              <div class="focus-inline" id="focus-inline"></div>
+            </div>
+
+            <section class="stage practice-video" id="live-panel">
+              <video id="cam" autoplay playsinline muted></video>
+              <canvas id="avatar" width="640" height="720" aria-hidden="true"></canvas>
+              <div class="record-badge"><span></span>대기 중</div>
+              <div class="timer">00:00</div>
+              <div id="status" class="status">카메라 준비 중</div>
+              <pre id="debug" class="debug"></pre>
+            </section>
+
+            <section class="hud-grid" id="live-hud" aria-label="실시간 지표">
+              <div class="hud-card is-muted" data-hud-card="wpm">
+                <span>말 속도</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+              <div class="hud-card is-muted" data-hud-card="filler">
+                <span>필러 표현</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+              <div class="hud-card is-muted" data-hud-card="silence">
+                <span>침묵 구간</span>
+                <strong data-hud-value>—</strong>
+                <div class="meter"><i style="width: 0%"></i></div>
+              </div>
+            </section>
+            <video id="recorded" hidden></video>
+
+            <section class="controls practice-controls" id="live-controls">
+              <label class="device-pick">
+                카메라
+                <select id="cam-select"></select>
+              </label>
+              <button id="btn-start" class="btn btn-ghost" disabled>카메라 준비 중</button>
+              <button id="btn-pause" class="btn btn-ghost" disabled>일시정지</button>
+              <button id="btn-stop" class="btn btn-primary" disabled>제출</button>
+            </section>
+          </section>
+        </section>
+
+        <aside class="agent-sidebar right" id="agent-sidebar">
+          <section class="agent-panel agent-chat-panel">
+            <div class="agent-sidebar-head">
+              <strong>AI agent</strong>
+              <div class="agent-head-actions">
+                <button type="button" class="btn btn-ghost voice-toggle" id="agent-voice-toggle" aria-pressed="false">
+                  <i class="ti ti-volume-off"></i>
+                  <span>음성 꺼짐</span>
+                </button>
+                <span class="mini-pill" id="agent-state">질문 대기</span>
+              </div>
+            </div>
+            <div class="agent-chat-feed" id="agent-chat-feed" aria-live="polite"></div>
+            <form class="agent-chat-input" id="agent-chat-form">
+              <input id="agent-chat-input" type="text" placeholder="지금 내 발표 어때?" />
+              <button type="submit" class="btn btn-primary agent-send-button" aria-label="agent에게 질문 보내기">
+                <i class="ti ti-send-2"></i>
+              </button>
+            </form>
+          </section>
+        </aside>
+      </section>
+
+      <section id="review" hidden></section>
+    </main>
+
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const params = new URLSearchParams(location.search);
+      const project = params.get('project') || '오늘의 말하기 연습';
+      const goal = params.get('goal') || '';
+      const type = params.get('type') || 'free';
+      const typeLabel = {
+        presentation: '발표',
+        interview: '면접',
+        negotiation: '협상',
+        persuasion: '설득',
+        daily: '일상 대화',
+        phone: '전화',
+        online: '전화·온라인',
+        free: '자유 연습',
+      };
+      document.getElementById('page-title').textContent = project;
+      document.getElementById('session-context').textContent = `${typeLabel[type] || '자유 연습'} · AI agent 세션`;
+      const focusInline = document.getElementById('focus-inline');
+      (goal ? goal.split(',').map((item) => item.trim()).filter(Boolean) : ['말 속도']).forEach((item) => {
+        const pill = document.createElement('span');
+        pill.className = 'mini-pill';
+        pill.textContent = item;
+        focusInline.appendChild(pill);
+      });
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      const grid = document.getElementById('agent-grid');
+      const leftToggle = document.getElementById('left-sidebar-toggle');
+      const rightToggle = document.getElementById('right-sidebar-toggle');
+
+      leftToggle.addEventListener('click', () => {
+        grid.classList.toggle('is-left-collapsed');
+        const collapsed = grid.classList.contains('is-left-collapsed');
+        leftToggle.setAttribute('aria-label', collapsed ? '세션 사이드바 펼치기' : '세션 사이드바 접기');
+      });
+
+      rightToggle.addEventListener('click', () => {
+        grid.classList.toggle('is-right-collapsed');
+        const collapsed = grid.classList.contains('is-right-collapsed');
+        rightToggle.setAttribute('aria-label', collapsed ? 'AI agent 사이드바 펼치기' : 'AI agent 사이드바 접기');
+      });
+
+      syncThemeToggle();
+    </script>
+    <script type="module" src="/src/practice.ts"></script>
+  </body>
+</html>

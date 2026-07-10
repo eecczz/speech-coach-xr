@@ -1,0 +1,57 @@
+# 친구·가벼운 대화 코칭 루브릭
+# 일상 대화 — 자연스러움·감정 표현·반응성 중심.
+# 발표체·면접체 톤은 거리감으로 감점, 가벼운 흐트러짐은 허용.
+
+id: casual
+display_name: "친구 대화 코칭"
+description: "친구·가벼운 사이의 일상 대화 — 자연스러움·반응성·감정 표현 중심"
+audience_perspective: |
+  편안한 대화 코치 관점. "이 사람과 또 수다 떨고 싶은가?"라는 질문에 답하는 톤.
+  지나친 격식·과묵·딱딱함이 감점, 자연스러운 반응(웃음·맞장구)이 가점.
+  코칭 문장 예시: "친구의 농담에 표정 변화가 거의 없어 호응이 부족해 보였습니다.
+  웃음 1회만 더 있어도 분위기가 한층 자연스러워집니다."
+
+axes:
+  logic:
+    weight: 0.3
+    text: |
+      논리 구조 중요하지 않음. 대화 흐름이 끊기지 않으면 OK.
+
+  delivery:
+    weight: 0.7
+    text: |
+      편한 톤. 적정 WPM 120~180 (느린 것보단 자연스러움 우선).
+      filler 어느 정도 OK — 너무 많으면 (분당 15+) 감점.
+      말끝 흐림은 어색함 신호.
+
+  gaze:
+    weight: 0.6
+    text: |
+      eye contact는 부담 없는 수준. 자유로움.
+      극단적 회피(`gaze_downward` 다수)는 어색함 신호.
+
+  posture:
+    weight: 0.5
+    text: |
+      편한 자세 허용. `chin_on_hand`도 친구끼리는 자연스러움.
+      `hand_fidget`은 안절부절 인상 약간 감점.
+
+  expression:
+    weight: 1.0
+    text: |
+      *반응성과 감정 표현이 핵심* — 미소·웃음·놀란 표정 같은 변화 풍부함이 좋음.
+      `low_smile` 지속 = 무관심한 인상.
+      `expression_flat` = 호응 부족.
+
+event_kind_emphasis:
+  low_smile: mistake              # 친구끼리도 무미소는 거리감
+  expression_flat: mistake
+  chin_on_hand: inaccuracy        # 친구끼리는 자연스러움 (덜 심각)
+  head_tilt_sustained: good       # 경청 자세로도 해석
+  hand_fidget: inaccuracy
+  gaze_downward: inaccuracy
+  motion_hesitation: inaccuracy
+  silence_long: inaccuracy        # 친구끼리 침묵은 무난
+  posture_sway: good              # 자연스러운 움직임
+
+top_priority_count: 3

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>연습 상황 입력 - SpeakUp</title>
+    <script>
+      const savedTheme = localStorage.getItem('speakup-theme');
+      document.documentElement.dataset.theme = savedTheme || 'light';
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/brand.css" />
+  </head>
+  <body>
+    <main class="container app-shell page-center">
+      <section class="screen single-column" style="width:min(560px,100%);">
+        <div class="topbar app-nav">
+          <a class="brand" href="create-project.html" aria-label="SpeakUp 프로젝트">
+            <div class="brand-badge">S</div>
+            <div class="brand-copy">
+              <strong>SpeakUp</strong>
+              <span>연습 상황 입력</span>
+            </div>
+          </a>
+          <button type="button" class="btn theme-toggle mode-toggle" data-theme-toggle aria-label="테마 전환">🌙</button>
+        </div>
+
+        <section class="progress-steps" aria-label="진행 단계">
+          <span>1 프로젝트</span>
+          <span class="is-current">2 상황 입력</span>
+          <span>3 포커스 선택</span>
+        </section>
+
+        <div class="page-heading">
+          <h1>오늘 어떤 말하기 연습을 할까요?</h1>
+          <p id="project-context"></p>
+        </div>
+
+        <div class="field">
+          <label for="practice-situation">연습 상황</label>
+          <input id="practice-situation" type="text" />
+        </div>
+
+        <div class="actions vertical">
+          <button id="btn-next" class="btn btn-primary">다음</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const themeToggle = document.querySelector('[data-theme-toggle]');
+      const situationInput = document.getElementById('practice-situation');
+      const projectContext = document.getElementById('project-context');
+      const savedSituation = localStorage.getItem('speakup-practice-situation') || '';
+      const examples = ['창업 경진대회 발표', '교수님 면담', '대기업 면접'];
+      const params = new URLSearchParams(location.search);
+      const currentProjectId = params.get('projectId') || localStorage.getItem('speakup-current-project-id') || '';
+      const projects = JSON.parse(localStorage.getItem('speakup-projects') || '[]');
+      const currentProject = projects.find((project) => project.id === currentProjectId);
+
+      if (!currentProject) {
+        location.href = 'create-project.html';
+      }
+
+      if (projectContext && currentProject) {
+        localStorage.setItem('speakup-current-project-id', currentProject.id);
+        localStorage.setItem('speakup-project-name', currentProject.name);
+        projectContext.textContent = `${currentProject.name} 안에서 이어지는 연습이에요.`;
+      }
+
+      if (savedSituation) {
+        situationInput.value = savedSituation;
+      } else {
+        situationInput.placeholder = examples[Math.floor(Math.random() * examples.length)];
+      }
+
+      function syncThemeToggle() {
+        const theme = document.documentElement.dataset.theme || 'light';
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.setAttribute('aria-label', theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = (document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = nextTheme;
+        localStorage.setItem('speakup-theme', nextTheme);
+        syncThemeToggle();
+      });
+
+      situationInput.addEventListener('input', () => {
+        localStorage.setItem('speakup-practice-situation', situationInput.value.trim());
+      });
+
+      document.getElementById('btn-next').addEventListener('click', () => {
+        const value = situationInput.value.trim() || situationInput.placeholder || '자유 연습';
+        localStorage.setItem('speakup-practice-situation', value);
+        const next = new URL('focus-selection.html', location.href);
+        if (currentProjectId) next.searchParams.set('projectId', currentProjectId);
+        location.href = next.toString();
+      });
+
+      syncThemeToggle();
+    </script>
+  </body>
+</html>

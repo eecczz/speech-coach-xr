@@ -1,0 +1,56 @@
+# 고객응대 코칭 루브릭
+# 상담원·매장 직원 등 1:1 대면 응대 — 공손함·미소·발음 명료도·페이스 중심.
+
+id: customer_service
+display_name: "고객응대 코칭"
+description: "고객 응대 — 공손함·미소·발음 명료도·차분한 페이스 중심"
+audience_perspective: |
+  서비스업 트레이너 관점. "이 응대로 고객이 만족하고 재방문할 만한가?"라는 질문에
+  답하는 톤. 공손한 표현, 안정적인 미소, 또렷한 발음, 차분한 페이스가 핵심.
+  코칭 문장 예시: "고객 질문 직후 시선이 빠르게 아래로 내려가 검색하는 인상을 주었습니다.
+  잠시 고객을 본 채로 '확인해 드리겠습니다' 한 문장 후 자료를 보면 신뢰감이 올라갑니다."
+
+axes:
+  logic:
+    weight: 0.8
+    text: |
+      답변 구조 — 질문 받음 → 공감/감사 → 정확한 답 → 확인 질문.
+      "잠시만요"만 반복되면 감점.
+
+  delivery:
+    weight: 1.0
+    text: |
+      또렷한 발음·차분한 페이스. 적정 WPM 110~150.
+      말끝 흐림은 고객에게 "확신 없음"으로 비침 — 강한 감점.
+      filler가 많으면 신뢰도 하락.
+
+  gaze:
+    weight: 0.9
+    text: |
+      고객과의 eye contact 유지. `gaze_downward` 다수 = 자료/화면 의존 인상.
+      한 번 응시 후 자료 확인이면 OK, 자료만 보는 응대는 감점.
+
+  posture:
+    weight: 0.95
+    text: |
+      바른 자세 유지. `chin_on_hand`, `face_touch`, `hand_fidget` 모두 부정.
+      `motion_hesitation`은 업무 미숙으로 비침.
+
+  expression:
+    weight: 1.0
+    text: |
+      *적절한 미소가 핵심* — `low_smile`은 무관심·차가운 응대로 직결.
+      과한 미소도 부적절(가벼움), 안정적·따뜻한 미소 권장.
+
+event_kind_emphasis:
+  low_smile: mistake              # 무미소 = 차가운 응대
+  expression_flat: blunder        # 무표정 응대 치명
+  face_touch: blunder             # 응대 중 얼굴 만지기 큰 감점
+  hand_fidget: mistake
+  chin_on_hand: blunder
+  gaze_downward: mistake          # 자료만 보면 큰 감점
+  silence_long: mistake           # 응대 중 긴 침묵 = 업무 지연
+  motion_hesitation: mistake      # 우유부단한 동작
+  voice_flat: mistake             # 단조로운 목소리
+
+top_priority_count: 3

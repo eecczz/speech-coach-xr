@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeakUp</title>
+<script>
+const savedTheme = localStorage.getItem('speakup-theme');
+document.documentElement.dataset.theme = savedTheme || 'light';
+</script>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+:root{
+  --bg:#F4F6FB;
+  --bg-soft:#EEF3F8;
+  --surface:#FFFFFF;
+  --surface-soft:#FAFBFF;
+  --border:#DDE3EE;
+  --text:#2e2c3a;
+  --text-sub:#6b6880;
+  --text-soft:#9896a8;
+  --ink:#2e2c3a;
+  --ink-inverse:#F4F6FB;
+  --shadow:0 2px 24px rgba(46,44,58,.06);
+}
+:root[data-theme="dark"]{
+  --bg:#15171C;
+  --bg-soft:#1E2128;
+  --surface:#1E2128;
+  --surface-soft:#232730;
+  --border:rgba(255,255,255,.1);
+  --text:#FFFFFF;
+  --text-sub:#B8BCC8;
+  --text-soft:#8f95a4;
+  --ink:#F4F6FB;
+  --ink-inverse:#15171C;
+  --shadow:0 10px 32px rgba(0,0,0,.22);
+}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;transition:background .18s ease,color .18s ease;}
+.nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:56px;background:color-mix(in srgb, var(--bg) 86%, transparent);backdrop-filter:blur(12px);border-bottom:.5px solid var(--border);}
+.nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;}
+.nav-icon{width:28px;height:28px;background:var(--ink);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.nav-icon span{font-size:12px;font-weight:600;color:var(--ink-inverse);}
+.nav-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.03em;}
+.nav-actions{display:flex;align-items:center;gap:8px;}
+.nav-link,.theme-toggle{font-size:13px;color:var(--text-sub);padding:7px 14px;border-radius:999px;border:.5px solid transparent;cursor:pointer;text-decoration:none;transition:all .12s;background:transparent;font-family:'Pretendard',sans-serif;}
+.nav-link:hover{background:var(--bg-soft);color:var(--text);}
+.theme-toggle{width:34px;height:34px;padding:0;border-color:var(--border);background:var(--surface);display:inline-flex;align-items:center;justify-content:center;font-size:14px;}
+.theme-toggle:hover{border-color:var(--text-soft);color:var(--text);}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;padding:72px 24px 64px;text-align:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);letter-spacing:.07em;text-transform:uppercase;padding:4px 13px;border-radius:999px;border:.5px solid var(--border);background:var(--surface);margin-bottom:24px;}
+.hero-badge-dot{width:5px;height:5px;border-radius:50%;background:var(--ink);}
+.hero-title{font-size:48px;font-weight:600;color:var(--text);letter-spacing:-0.035em;line-height:1.18;margin-bottom:18px;max-width:640px;}
+.hero-title .muted{color:var(--text-soft);}
+.hero-sub{font-size:16px;font-weight:400;color:var(--text-sub);line-height:1.75;letter-spacing:-0.01em;max-width:400px;margin-bottom:36px;}
+.hero-btns{display:flex;gap:10px;align-items:center;justify-content:center;margin-bottom:52px;}
+.btn-main{font-size:14px;font-weight:500;color:var(--ink-inverse);background:var(--ink);border:none;border-radius:999px;padding:11px 28px;cursor:pointer;font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:7px;transition:opacity .12s;text-decoration:none;}
+.btn-main:hover{opacity:.85;}
+.btn-main i{font-size:14px;transition:transform .14s ease;}
+.btn-main:hover i{transform:translateX(2px);}
+.btn-ghost{font-size:14px;color:var(--text-sub);background:transparent;border:.5px solid var(--border);border-radius:999px;padding:11px 22px;cursor:pointer;font-family:'Pretendard',sans-serif;transition:all .12s;text-decoration:none;}
+.btn-ghost:hover{border-color:var(--text-soft);color:var(--text);}
+.situations{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:48px;}
+.sit-chip{display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:999px;border:.5px solid var(--border);background:var(--surface);font-size:13px;color:var(--text-sub);cursor:pointer;transition:all .15s;font-family:'Pretendard',sans-serif;}
+.sit-chip i{font-size:15px;}
+.sit-chip:hover{border-color:var(--text-soft);color:var(--text);}
+.sit-chip.active{background:var(--ink);color:var(--ink-inverse);border-color:var(--ink);}
+.preview-wrap{width:100%;max-width:680px;margin-bottom:14px;}
+.preview-card{background:var(--surface);border:.5px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);}
+.preview-topbar{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:.5px solid var(--bg-soft);background:var(--surface-soft);}
+.preview-steps{display:flex;gap:5px;}
+.prev-step{font-size:10px;padding:3px 10px;border-radius:999px;font-family:'Pretendard',sans-serif;}
+.preview-meta{font-size:11px;color:var(--text-soft);margin-left:auto;}
+.preview-body{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:16px 18px;}
+.prev-card{border-radius:10px;padding:12px 14px;border:.5px solid var(--bg-soft);background:var(--bg);}
+.prev-card-label{font-size:10px;color:var(--text-soft);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.prev-card-val{font-size:20px;font-weight:500;color:var(--text);font-family:'Pretendard',monospace;}
+.prev-card-val span{font-size:12px;color:var(--text-soft);}
+.prev-card-delta{font-size:11px;color:#059669;margin-top:3px;display:flex;align-items:center;gap:3px;}
+.prev-ai{margin:0 18px 16px;border-left:2px solid var(--ink);border-radius:0 10px 10px 0;background:var(--bg-soft);padding:10px 13px;font-size:13px;color:var(--text);line-height:1.65;}
+.features{display:flex;align-items:stretch;justify-content:center;width:100%;max-width:680px;border:.5px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;margin-top:14px;}
+.feat{flex:1;padding:18px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;border-right:.5px solid var(--border);}
+.feat:last-child{border-right:none;}
+.feat-icon{width:32px;height:32px;border-radius:8px;background:var(--bg-soft);display:flex;align-items:center;justify-content:center;}
+.feat-icon i{font-size:16px;color:var(--text);}
+.feat-title{font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.01em;}
+.feat-desc{font-size:12px;color:var(--text-soft);line-height:1.6;}
+.modal-overlay{position:fixed;inset:0;background:rgba(27,31,39,.26);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:20px;z-index:80;}
+.modal-overlay.is-open{display:flex;}
+.modal{width:min(100%,420px);background:var(--surface);border:.5px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:22px;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.modal-title{font-size:18px;font-weight:600;letter-spacing:-0.03em;color:var(--text);}
+.modal-close{width:32px;height:32px;border:none;border-radius:999px;background:var(--bg-soft);color:var(--text-sub);font-size:16px;cursor:pointer;}
+.modal-close:hover{color:var(--text);}
+.modal-steps{display:grid;gap:12px;margin-bottom:18px;}
+.modal-step{padding:12px 14px;border:.5px solid var(--border);border-radius:12px;background:var(--surface-soft);}
+.modal-step strong{display:block;font-size:13px;color:var(--text);margin-bottom:5px;}
+.modal-step p{font-size:12px;color:var(--text-sub);line-height:1.6;}
+.modal-action{display:flex;}
+.modal-action .btn-main{width:100%;justify-content:center;}
+@media (max-width: 880px){
+  .nav{padding:0 20px;}
+  .hero-title{font-size:38px;}
+  .preview-body{grid-template-columns:1fr;}
+  .features{flex-direction:column;}
+  .feat{border-right:none;border-bottom:.5px solid var(--border);}
+  .feat:last-child{border-bottom:none;}
+}
+@media (max-width: 560px){
+  .nav{padding:0 16px;height:52px;}
+  .hero{padding:56px 18px 48px;}
+  .hero-title{font-size:31px;}
+  .hero-sub{font-size:14px;}
+  .hero-btns{flex-direction:column;width:100%;}
+  .btn-main,.btn-ghost{width:100%;justify-content:center;}
+  .preview-topbar{flex-wrap:wrap;}
+  .preview-meta{margin-left:0;}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="index.html">
+    <div class="nav-icon"><span>S</span></div>
+    <span class="nav-name">SpeakUp</span>
+  </a>
+  <div class="nav-actions">
+    <button type="button" class="nav-link" id="open-how">어떻게 작동하나요?</button>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 전환">🌙</button>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">
+    <div class="hero-badge-dot"></div>
+    AI Speech Coach
+  </div>
+  <h1 class="hero-title">말하는 방식이 달라지면,<br><span class="muted">삶이 달라져요.</span></h1>
+  <p class="hero-sub">실시간 AI agent와 대화하며<br>말하기 습관을 바로 고쳐가요.</p>
+  <div class="hero-btns">
+    <a class="btn-main" href="create-project.html">세션 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+    <a class="btn-ghost" href="create-project.html?mode=existing">기존 세션으로 시작하기</a>
+  </div>
+
+  <div class="situations">
+    <span class="sit-chip active" onclick="selectSit(this)"><i class="ti ti-presentation" aria-hidden="true"></i>발표</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-briefcase" aria-hidden="true"></i>면접</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-handshake" aria-hidden="true"></i>협상</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-message-circle" aria-hidden="true"></i>일상 대화</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-phone" aria-hidden="true"></i>전화·온라인</span>
+    <span class="sit-chip" onclick="selectSit(this)"><i class="ti ti-sparkles" aria-hidden="true"></i>자유 연습</span>
+  </div>
+
+  <div class="preview-wrap" id="preview">
+    <div class="preview-card">
+      <div class="preview-topbar">
+        <div class="preview-steps">
+          <span class="prev-step" style="background:var(--ink);color:var(--ink-inverse);">1 준비</span>
+          <span class="prev-step" style="background:var(--bg-soft);color:var(--text-soft);">2 연습</span>
+          <span class="prev-step" style="background:var(--bg-soft);color:var(--text-soft);">3 코칭</span>
+        </div>
+        <span class="preview-meta" id="preview-meta">오늘의 발표 연습 · 3회차</span>
+      </div>
+      <div class="preview-body">
+        <div class="prev-card">
+          <div class="prev-card-label">말 속도</div>
+          <div class="prev-card-val">142 <span>wpm</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>저번보다 8% 개선</div>
+        </div>
+        <div class="prev-card">
+          <div class="prev-card-label">필러 표현</div>
+          <div class="prev-card-val">3 <span>회</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>5회 줄었어요</div>
+        </div>
+        <div class="prev-card">
+          <div class="prev-card-label">전체 점수</div>
+          <div class="prev-card-val">78 <span>/ 100</span></div>
+          <div class="prev-card-delta"><i class="ti ti-trending-up" style="font-size:12px;" aria-hidden="true"></i>목표까지 7점</div>
+        </div>
+      </div>
+      <div class="prev-ai" id="preview-ai">말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.</div>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-file-analytics" aria-hidden="true"></i></div>
+      <div class="feat-title">AI agent 실시간 코칭</div>
+      <div class="feat-desc">시선, 자세, 말 속도를 보며<br>즉시 조언을 받아요.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></div>
+      <div class="feat-title">성장 트래킹</div>
+      <div class="feat-desc">연습 기록을 쌓으며<br>말하기 변화를 확인해보세요.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon"><i class="ti ti-folders" aria-hidden="true"></i></div>
+      <div class="feat-title">연습 기록 모아보기</div>
+      <div class="feat-desc">세션별 코칭 결과를 모아 두고<br>필요할 때 다시 꺼내볼 수 있어요.</div>
+    </div>
+  </div>
+</section>
+
+<div class="modal-overlay" id="how-modal" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="how-modal-title">
+    <div class="modal-head">
+      <h2 class="modal-title" id="how-modal-title">어떻게 작동하나요?</h2>
+      <button type="button" class="modal-close" id="close-how" aria-label="닫기">×</button>
+    </div>
+    <div class="modal-steps">
+      <div class="modal-step">
+        <strong>1. 세션 선택</strong>
+        <p>발표, 면접, 대화 등 원하는 연습을 고릅니다.</p>
+      </div>
+      <div class="modal-step">
+        <strong>2. 실시간 세션 진행</strong>
+        <p>AI agent와 대화하며 바로 코칭을 받습니다.</p>
+      </div>
+      <div class="modal-step">
+        <strong>3. AI 코칭 확인</strong>
+        <p>연습 흐름을 정리한 코칭 결과를 차분히 확인합니다.</p>
+      </div>
+    </div>
+    <div class="modal-action">
+      <a class="btn-main" href="create-project.html">세션 시작하기<i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+    </div>
+  </div>
+</div>
+
+<script>
+const sitMeta={'발표':'오늘의 발표 연습 · 3회차','면접':'오늘의 면접 연습 · 5회차','협상':'오늘의 협상 연습 · 2회차','일상 대화':'오늘의 일상 대화 연습 · 1회차','전화·온라인':'오늘의 전화 연습 · 4회차','자유 연습':'오늘의 자유 연습 · 7회차'};
+const sitAI={'발표':'말의 흐름이 안정됐고 도입부에서 자신감이 느껴졌어요. 다음엔 답변 마무리를 좀 더 명확하게 끝내보세요.','면접':'자기소개 구간이 자연스럽게 흘렀어요. 다음엔 "이상입니다"로 답변을 명확하게 끝내보세요.','협상':'논리 흐름은 탄탄했어요. 설득 구간에서 말 속도가 빨라졌으니 다음엔 여유 있게 가보세요.','일상 대화':'첫 인상이 따뜻하게 느껴졌어요. 필러 표현이 조금 있었는데 잠깐 멈추는 연습을 해보세요.','전화·온라인':'목소리 볼륨이 안정적이었어요. 비대면에선 더 또렷하게 첫 마디를 시작해보세요.','자유 연습':'전반적으로 말이 유려하게 흘렀어요. 다음엔 연습 목적을 정해서 집중해보세요.'};
+function selectSit(el){
+  document.querySelectorAll('.sit-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  const name=el.textContent.trim();
+  document.getElementById('preview-meta').textContent=sitMeta[name]||'';
+  document.getElementById('preview-ai').textContent=sitAI[name]||'';
+}
+
+const themeToggle=document.getElementById('theme-toggle');
+function syncThemeToggle(){
+  const theme=document.documentElement.dataset.theme||'light';
+  themeToggle.textContent=theme==='dark'?'☀️':'🌙';
+  themeToggle.setAttribute('aria-label',theme==='dark'?'라이트 모드로 전환':'다크 모드로 전환');
+}
+themeToggle.addEventListener('click',()=>{
+  const nextTheme=(document.documentElement.dataset.theme||'light')==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=nextTheme;
+  localStorage.setItem('speakup-theme',nextTheme);
+  syncThemeToggle();
+});
+
+const howModal=document.getElementById('how-modal');
+const openHow=document.getElementById('open-how');
+const closeHow=document.getElementById('close-how');
+function openModal(){
+  howModal.classList.add('is-open');
+  howModal.setAttribute('aria-hidden','false');
+}
+function closeModal(){
+  howModal.classList.remove('is-open');
+  howModal.setAttribute('aria-hidden','true');
+}
+openHow.addEventListener('click',openModal);
+closeHow.addEventListener('click',closeModal);
+howModal.addEventListener('click',(event)=>{
+  if(event.target===howModal) closeModal();
+});
+window.addEventListener('keydown',(event)=>{
+  if(event.key==='Escape') closeModal();
+});
+syncThemeToggle();
+</script>
+</body>
+</html>

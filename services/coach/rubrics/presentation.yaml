@@ -1,0 +1,60 @@
+# 발표 코칭 루브릭
+# 비즈니스/학술 발표 — 청중에 일방향 전달.
+# Coach 서비스가 SessionBundle.scenario == "presentation" 일 때 로드.
+
+id: presentation
+display_name: "발표 코칭"
+description: "비즈니스/학술 발표 — 청중에 일방향 전달"
+audience_perspective: |
+  정중하지만 직접적인 강사 톤. 환자 코칭이 아니라 발표 훈련. 칭찬 인플레이션 금지.
+
+axes:
+  logic:
+    weight: 1.0
+    text: |
+      도입/본론/결론 명확성, 핵심 메시지 일관성. `full_transcript` 근거.
+      transcript 비어있으면 "N/A — transcript 미수집"으로 표기하고 점수 자리에 0 입력.
+
+  delivery:
+    weight: 1.0
+    text: |
+      WPM, filler, pause/silence 이벤트 근거.
+      - 한국어 발표 적정 WPM: 140-180
+      - filler 권장: 분당 ≤5회 (학술/비즈니스 기준)
+      - pause: 의도된 침묵(<2s)은 효과적, 4초+ 침묵은 종종 흐름 단절
+
+  gaze:
+    weight: 0.9
+    text: |
+      `gaze_fixation_ratio` 평균, `gaze_lapse`, `gaze_downward` 이벤트 근거.
+      - 정면 응시율 0.7+ 양호, 0.5 미만 우려
+      - gaze_downward 이벤트 다수 = 원고 의존 패턴
+
+  posture:
+    weight: 0.9
+    text: |
+      `posture_sway_mean`, `posture_sway`, `head_tilt_sustained`, `chin_on_hand`, `head_nodding` 이벤트 근거.
+      - chin_on_hand 이벤트는 단 1회만 있어도 -1점 이상
+      - head_tilt_sustained 10초+ 시 -1점
+
+  expression:
+    weight: 0.8
+    text: |
+      `expression_diversity_mean`, `expression_flat`, `hand_freeze`, `gesture_excessive` 이벤트 근거.
+      - 표정 다양성 평균 0.5 이상 양호
+      - hand_freeze 10초+ 빈발 = 무미건조
+      - gesture_excessive는 청중의 시선을 분산시키는 부정 신호
+
+# 같은 detector를 시나리오별로 다르게 가중치/심각도. 비어있으면 dashboard.py 기본값 사용.
+event_kind_emphasis:
+  chin_on_hand: blunder
+  head_tilt_sustained: mistake
+  gesture_excessive: inaccuracy   # 발표에선 약간의 움직임 OK
+  # Domain-expansion events — presentation은 청중 인지가 중심이므로 안절부절·산만 위주.
+  face_touch: mistake             # 발표 중 얼굴 만짐 = 자신감 결여
+  hand_fidget: mistake            # 안절부절 손 만지작 = 미숙해 보임
+  motion_hesitation: inaccuracy   # 가벼운 망설임은 흔함, 큰 감점 X
+  gaze_wander: mistake            # 시선 산만 = 청중과 단절
+  low_smile: inaccuracy           # 발표에선 무미소 자체는 큰 문제 X
+
+top_priority_count: 3

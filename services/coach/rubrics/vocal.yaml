@@ -1,0 +1,59 @@
+# 보컬 코칭 루브릭
+# 노래·발성 연습 — 피치 정확성·호흡·표현력 중심.
+# 같은 detector 풀에서 가중을 크게 바꿔 다른 정체성을 보여주는 시연 시나리오.
+
+id: vocal
+display_name: "보컬 코칭"
+description: "노래·발성 연습 — 피치 다양성·호흡 안정성·표현력 중심"
+audience_perspective: |
+  보컬 트레이너 관점. 발성·호흡·표현력 중심.
+  자세는 호흡과 연결될 때만 평가하고, 시선/논리는 부차적.
+
+axes:
+  logic:
+    weight: 0.3   # 가사 의미는 부차적
+    text: |
+      가사 전달의 명확성. 발음 명료도. 보컬에서는 가사 구조보다 음악적 흐름 우선.
+      transcript 비어있으면 "N/A".
+
+  delivery:
+    weight: 1.0
+    text: |
+      피치 변동성 (pitch_sd_semitones — 운율 데이터 있을 때) — 단조롭지 않은가.
+      호흡 유지 — `long_pause`는 호흡 끊김으로 해석하되, 곡 구조상 의도된 쉼은 긍정.
+      WPM/filler는 노래에선 평가하지 않음 (가사 박자에 종속).
+
+  gaze:
+    weight: 0.3   # 보컬 연습에서 시선은 덜 중요
+    text: |
+      카메라/관객 응시는 보컬 연습에서 부차적. 가벼운 평가.
+      `gaze_downward`는 악보를 보는 것으로 해석할 수 있어 큰 감점 아님.
+
+  posture:
+    weight: 0.95   # 호흡과 직결
+    text: |
+      호흡 자세 — 어깨 들림(posture_sway), 머리 정렬, 턱 위치.
+      - chin_on_hand는 보컬에서도 문제 (턱 위치가 발성에 영향)
+      - head_tilt_sustained는 발성 mix 위치를 흐트림 — 감점
+
+  expression:
+    weight: 1.0   # 표현력은 보컬의 핵심
+    text: |
+      감정 표현 — expression_diversity, expression_valence.
+      무표정으로 노래는 강한 감점.
+      가사의 감정 곡선과 표정 일치도 (LLM이 transcript와 함께 해석).
+
+event_kind_emphasis:
+  silence_long: inaccuracy           # 보컬에서 침묵은 흐름 단절보다 덜 심각 (브레스)
+  expression_flat: blunder           # 무표정 노래 = 치명
+  gaze_lapse: inaccuracy             # 시선 이탈 관대
+  gaze_downward: inaccuracy          # 악보 응시
+  hand_freeze: inaccuracy            # 보컬에선 손동작 빈도 부차적
+  # Domain-expansion — 보컬은 호흡·표현 중심이라 행동 신호 대부분 관대.
+  face_touch: inaccuracy             # 호흡 사이 가벼운 움직임 OK
+  hand_fidget: inaccuracy
+  motion_hesitation: inaccuracy
+  gaze_wander: inaccuracy
+  low_smile: inaccuracy              # 발라드 등 진지한 곡은 무미소 정상
+
+top_priority_count: 3
