@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpeakUp XR — 가상 면접실</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; overflow: hidden; background: #c9ced6; font-family: system-ui, sans-serif; }
+      #xr-root { position: fixed; inset: 0; }
+      #xr-status {
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+        z-index: 10; padding: 8px 16px; border-radius: 999px;
+        background: rgba(16, 24, 32, 0.72); color: #fff; font-size: 14px;
+        backdrop-filter: blur(6px); pointer-events: none; white-space: nowrap;
+      }
+      /* three's VRButton is appended to <body>; move it to the bottom-right so it
+         doesn't collide with the centered interview controls. */
+      #VRButton { bottom: 24px !important; left: auto !important; right: 24px !important; transform: none !important; }
+      #controls {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        z-index: 10; display: flex; gap: 12px;
+      }
+      #controls button {
+        padding: 12px 22px; border: none; border-radius: 999px; cursor: pointer;
+        font-size: 15px; font-weight: 600; color: #fff; background: #2f6fed;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.25); transition: opacity .15s, transform .1s;
+      }
+      #controls button:hover:not(:disabled) { transform: translateY(-1px); }
+      #controls button:disabled { opacity: 0.4; cursor: default; }
+      #btn-next { background: #16a34a; }
+    </style>
+  </head>
+  <body>
+    <div id="xr-status">초기화 중…</div>
+    <div id="xr-root"></div>
+    <div id="controls">
+      <button id="btn-start" disabled>면접 시작</button>
+      <button id="btn-next" disabled>다음 ▶</button>
+    </div>
+    <script type="module" src="/src/xr/main.ts"></script>
+  </body>
+</html>

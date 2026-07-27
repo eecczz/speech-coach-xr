@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "xr-web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd apps/web && npm run dev"],
+      "port": 5173
+    }
+  ]
+}

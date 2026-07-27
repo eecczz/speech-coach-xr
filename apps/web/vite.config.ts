@@ -16,6 +16,7 @@ export default defineConfig({
         practice: resolve(__dirname, 'practice.html'),
         report: resolve(__dirname, 'report.html'),
         dashboard: resolve(__dirname, 'dashboard.html'),
+        interviewXr: resolve(__dirname, 'interview-xr.html'),
       },
     },
   },
