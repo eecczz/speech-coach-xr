@@ -24,6 +24,18 @@ services/audio-pipeline/samples/*
 # External reference repos (cloned read-only)
 reference/
 
+# Unity (SpeakUpXR-Unity)
+SpeakUpXR-Unity/.utmp/
+SpeakUpXR-Unity/.gradle/
+SpeakUpXR-Unity/Library/
+SpeakUpXR-Unity/Temp/
+SpeakUpXR-Unity/Obj/
+SpeakUpXR-Unity/Logs/
+SpeakUpXR-Unity/UserSettings/
+SpeakUpXR-Unity/Builds/
+SpeakUpXR-Unity/*.csproj
+SpeakUpXR-Unity/*.sln
+
 # IDE / OS
 .vscode/
 .idea/
