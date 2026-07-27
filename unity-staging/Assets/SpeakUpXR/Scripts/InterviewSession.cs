@@ -5,6 +5,7 @@
 // First question is a fixed opener (natural start); every later question comes from
 // the coach backend (answer-aware follow-up / pressure). Voice is behind ISpeech so
 // the subtitle-only MVP works before TTS/STT are wired.
+// Questions are voiced by the panel member responsible for the question kind.
 
 using System;
 using System.Collections;
@@ -37,7 +38,7 @@ namespace SpeakUpXR
     public class InterviewSession : MonoBehaviour
     {
         public CoachApi Api;
-        public InterviewerController Interviewer;
+        public InterviewerPanel Panel;
         public InterviewHud Hud;
         public int MaxQuestions = 5;
 
@@ -82,7 +83,7 @@ namespace SpeakUpXR
             SetState(SessionState.Intro);
             Hud.SetQuestion("면접을 시작합니다.");
             Hud.SetStatus("면접 시작", HudTone.Ask);
-            yield return SpeakAs(IntroLine);
+            yield return SpeakAs(IntroLine, "base");
             yield return RunAsk(new InterviewNextResponse { question = FirstQuestion, kind = "base" });
         }
 
@@ -92,7 +93,7 @@ namespace SpeakUpXR
             SetState(SessionState.Asking);
             Hud.SetQuestion(next.question);
             Hud.SetStatus("면접관이 질문하는 중", HudTone.Ask);
-            yield return SpeakAs(next.question);
+            yield return SpeakAs(next.question, next.kind);
 
             SetState(SessionState.Listening);
             Hud.SetStatus("답변해 주세요 — 끝나면 트리거/다음", HudTone.Listen);
@@ -104,7 +105,7 @@ namespace SpeakUpXR
             SetState(SessionState.Thinking);
             Hud.SetInterim("");
             Hud.SetStatus("생각하는 중…", HudTone.Think);
-            if (Interviewer != null) Interviewer.Nod();
+            if (Panel != null) Panel.NodRandom();
 
             var req = new InterviewNextRequest
             {
@@ -132,7 +133,7 @@ namespace SpeakUpXR
             SetState(SessionState.Closing);
             Hud.SetQuestion("면접이 종료되었습니다. 리포트를 준비합니다.");
             Hud.SetStatus("면접 종료", HudTone.Done);
-            yield return SpeakAs(ClosingLine);
+            yield return SpeakAs(ClosingLine, "closing");
 
             InterviewReportResponse report = null;
             yield return Api.Report(
@@ -144,11 +145,11 @@ namespace SpeakUpXR
             OnFinished?.Invoke(_history, report);
         }
 
-        private IEnumerator SpeakAs(string line)
+        private IEnumerator SpeakAs(string line, string kind)
         {
-            if (Interviewer != null) Interviewer.SetSpeaking(true);
+            if (Panel != null) Panel.BeginSpeaking(kind);
             yield return _speech.Speak(line);
-            if (Interviewer != null) Interviewer.SetSpeaking(false);
+            if (Panel != null) Panel.EndSpeaking();
         }
     }
 }

@@ -16,6 +16,11 @@ namespace SpeakUpXR
         [Tooltip("Where the interviewer looks (the user's head camera)")]
         public Transform LookTarget;
 
+        [Header("Variant — 같은 VRM을 쓰는 동안 클론 느낌 제거")]
+        public Color HairTint = Color.white;
+        public Color OutfitTint = Color.white;
+        [Range(0.9f, 1.1f)] public float BodyScale = 1f;
+
         private Vrm10Instance _vrm;
         private Transform _neck;
         private Transform _chest;
@@ -55,12 +60,43 @@ namespace SpeakUpXR
             if (_chest) _chestBase = _chest.localRotation;
 
             ApplyRestingPose(anim);
+            _blinkNext = Random.Range(1.5f, 4.5f); // 패널 멤버끼리 눈 깜빡임 비동기화
+            transform.localScale = Vector3.one * BodyScale;
+            ApplyVariant(root);
 
             if (LookTarget != null)
             {
                 _vrm.LookAtTargetType = VRM10ObjectLookAt.LookAtTargetTypes.SpecifiedTransform;
                 _vrm.LookAtTarget = LookTarget;
             }
+        }
+
+        /// <summary>머리/의상 재질을 이름 기반으로 찾아 틴트 — VRM 교체 전까지의 클론 차별화.</summary>
+        private void ApplyVariant(GameObject root)
+        {
+            if (HairTint == Color.white && OutfitTint == Color.white) return;
+            int hair = 0, outfit = 0;
+            foreach (var r in root.GetComponentsInChildren<Renderer>())
+            {
+                foreach (var m in r.materials) // 인스턴스 재질 — 아바타별 개별 틴트
+                {
+                    if (!m || !m.HasProperty("_Color")) continue;
+                    var n = m.name.ToLowerInvariant();
+                    if (n.Contains("hair"))
+                    {
+                        m.color = Color.Lerp(m.color, HairTint, 0.6f);
+                        hair++;
+                    }
+                    else if (n.Contains("cloth") || n.Contains("tops") || n.Contains("bottoms")
+                          || n.Contains("jacket") || n.Contains("suit") || n.Contains("shoe")
+                          || n.Contains("accessor"))
+                    {
+                        m.color = Color.Lerp(m.color, OutfitTint, 0.55f);
+                        outfit++;
+                    }
+                }
+            }
+            Debug.Log($"[interviewer] variant applied: hair×{hair}, outfit×{outfit} ({name})");
         }
 
         /// <summary>Drop arms from T-pose to a natural resting posture (port of applyRestingPose).</summary>
