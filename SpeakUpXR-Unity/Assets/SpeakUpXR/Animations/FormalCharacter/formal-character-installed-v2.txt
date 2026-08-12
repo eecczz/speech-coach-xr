@@ -1,0 +1,2 @@
+Formal Character source: Assets/FORMAL_AVATAR/Model/Formal_Without Mustache_Base.fbx
+Three scene-authored instances use looping SeatedIdle.controller.

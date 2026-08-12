@@ -1,61 +1,47 @@
-# SpeakUp XR — Unity 전환 스테이징
+# SpeakUp XR — Unity 면접 구현
 
-에디터 설치가 끝나면 이 폴더의 내용물을 새 Unity 프로젝트에 이식한다.
-지정과제1(듀코젠) 대응: Unity 6 LTS · Quest 3(Android APK) 타깃 · AI 요소 = coach 백엔드.
+메인 프로젝트는 `SpeakUpXR-Unity/`다. `unity-staging/Assets/SpeakUpXR`는 코드 리뷰용 미러이며 항상 동기화한다.
 
-**개발 환경 = 연구실 Windows 데스크톱**(RTX 3060 / Win11). 아래는 Windows 기준.
+## 플레이 흐름
 
-## 이식 순서 (에디터 + 라이선스 로그인 후)
+1. 문 앞에서 시작해 문이 열리고 지원자석까지 이동한다.
+2. 따뜻한 인사 담당이 인사와 첫 질문을 한다.
+3. Quest 오른쪽 컨트롤러 트리거/A 버튼으로 답변을 끝낸다. 에디터에서는 Enter로 모의 답변을 넣는다.
+4. 답변 WAV를 `audio-pipeline:8000/analyze`로 보내 STT, WPM, 필러를 얻고 HMD 방향으로 질문자 응시를 근사한다.
+5. `coach:8002/interview/next`가 짧은 반응과 후속 질문, 각각의 담당 면접관을 고른다.
+6. 종료 인사 후 `Time.timeScale=0`으로 멈추고 리포트 로딩/결과를 표시한다.
 
-1. 프로젝트 생성 — **빈 3D (Built-in RP)**, URP 마이그레이션 불필요.
-   Unity Hub → New project → 3D (Built-in Render Pipeline) →
-   이름 `SpeakUpXR-Unity`, 위치는 이 리포 루트.
-   Android Build Support(+ OpenJDK, Android SDK/NDK) 모듈이 설치돼 있어야 한다.
+## 씬 편집 원칙
 
-   CLI로 만들 경우 (버전 폴더명은 실제 설치 버전으로 교체):
-   ```powershell
-   & "C:\Program Files\Unity\Hub\Editor\6000.0.79f1\Editor\Unity.exe" `
-     -batchmode -quit -createProject "<repo>\SpeakUpXR-Unity"
-   ```
-2. `manifest-additions.json`의 패키지들을 `SpeakUpXR-Unity\Packages\manifest.json` `dependencies`에 병합.
-3. 이 폴더의 `Assets\` 전체를 `SpeakUpXR-Unity\Assets\`로 복사.
-   `Assets\StreamingAssets\default.vrm`(10MB)이 여기 포함돼 있고, 아바타는 **이 경로 하나만** 쓴다
-   (`InterviewerController.VrmFileName` → StreamingAssets에서 런타임 로드). 별도 Avatars 폴더 불필요.
-4. 에디터 열고 메뉴 **SpeakUpXR → Build Interview Scene** 실행 (씬 자동 생성).
-5. Project Settings → XR Plug-in Management → Android 탭 → OpenXR 체크,
-   OpenXR Features에서 *Meta Quest Support* 활성화.
-6. Build Profiles → Android → Switch Platform → Build (APK).
+- `Assets/SpeakUpXR/Scenes/Interview.unity`의 오브젝트가 소스 오브 트루스다.
+- `SpeakUpXR → Create Editable Interview Scene`은 최초 생성/초기화용이다. 실행할 때마다 현재 씬을 덮어쓰므로 아트 편집 후에는 다시 실행하지 않는다.
+- 패널은 `SLOT_1_...`, `SLOT_2_...`, `SLOT_3_...` 세 개다. 각 슬롯의 placeholder 자식을 삭제하고 VRM/FBX 프리팹을 자식으로 넣은 뒤 `InterviewerController.AvatarRoot`에 연결한다.
+- 자리 이동은 슬롯 Transform만 옮긴다. 캐릭터 교체 후에도 Persona ID, 성격, TTS 음성은 슬롯에 유지된다.
+- 입장 동선은 `EntranceCutscene_EDIT_WAYPOINTS_HERE/Waypoint_Entrance`, `Waypoint_Seat`, 문은 `DoorPivot_EDIT_ME`에서 조정한다.
+- HUD와 리포트 위치는 각각 `InterviewHud_EDIT_POSITION`, `InterviewReport_EDIT_LAYOUT`에서 직접 조정한다.
 
-## 백엔드 연결
+## 3인 음성 기본값
 
-coach 서비스(:8002)는 그대로 사용한다. Quest 실기기에서는 **개발 PC의 LAN IP**로:
-`CoachApi.BaseUrl = "http://<PC-IP>:8002"` (Inspector에서 설정 가능).
-`ipconfig`로 IPv4 확인, 첫 연결 시 Windows 방화벽에서 8002 인바운드 허용(사설 네트워크) 필요.
+| 슬롯 | 성격 | Azure 한국어 음성 | 조절 |
+|---|---|---|---|
+| 1 | 따뜻한 인사 담당 | `ko-KR-SunHiNeural` | rate -4%, pitch +2% |
+| 2 | 분석적인 실무 담당 | `ko-KR-HyunsuNeural` | 기본 |
+| 3 | 압박형 임원 담당 | `ko-KR-InJoonNeural` | rate -6%, pitch -4% |
 
-mock 모드 실행 (LLM 키 없이 동작) — `services\coach` 에서:
-```powershell
-$env:LLM_PROVIDER="mock"; $env:PYTHONPATH="<repo>"
-.\.venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8002
+음성은 나이를 직접 보증하는 메타데이터가 아니라 성별이 명시된 서로 다른 한국어 보이스에 속도/피치를 절제해 적용한 캐릭터 연출값이다. 실제 캐릭터와 들어본 뒤 Inspector에서 교체한다.
+
+TTS 키는 Unity/Quest에 넣지 않는다. coach 서버의 `.env`에만 둔다.
+
+```env
+AZURE_SPEECH_KEY=...
+AZURE_SPEECH_REGION=koreacentral
 ```
-venv가 없으면 먼저: `py -3 -m venv .venv` → `.\.venv\Scripts\pip install -r requirements.txt`
 
-<details><summary>macOS에서 돌릴 때</summary>
+키가 없거나 TTS 서버가 실패하면 자막 타이밍과 합성 립싱크 폴백으로 면접 흐름은 계속된다.
 
-```sh
-LLM_PROVIDER=mock PYTHONPATH=<repo> ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8002
-```
-Unity 에디터 경로는 `/Applications/Unity/Hub/Editor/<버전>/Unity.app/Contents/MacOS/Unity`.
-</details>
+Quest에서는 두 서버 주소를 개발 PC LAN IP로 바꾼다.
 
-## 파일 맵
+- `CoachApi.BaseUrl = http://<PC-IP>:8002`
+- `CoachApi.AudioBaseUrl = http://<PC-IP>:8000`
 
-| 파일 | 역할 (WebXR 대응물) |
-|---|---|
-| `Assets/SpeakUpXR/Scripts/CoachApi.cs` | 백엔드 클라이언트 (`llm-brain.ts`) |
-| `Assets/SpeakUpXR/Scripts/InterviewSession.cs` | 면접 상태머신 (`interview-session.ts` + `interview-brain.ts`) |
-| `Assets/SpeakUpXR/Scripts/InterviewerController.cs` | VRM 면접관 시선·눈깜빡임·입·끄덕임 (`interviewer.ts`) |
-| `Assets/SpeakUpXR/Scripts/InterviewHud.cs` | 질문/상태 월드 UI (`interview-ui.ts`) |
-| `Assets/SpeakUpXR/Editor/SceneBootstrap.cs` | 면접실 씬 자동 생성 (`interview-room.ts`) |
-
-TTS/STT는 1차 이식에서 자막 우선(ISpeech 시임만 둠) — 음성은 백엔드 STT(audio-pipeline)
-연동 후 추가. Three.js 데모(`apps/web/interview-xr.html`)는 작동 레퍼런스로 보존.
+Windows 방화벽의 사설 네트워크에서 8000/8002 포트를 허용해야 한다.

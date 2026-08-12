@@ -1,0 +1,5 @@
+Mixamo interview Animator installed.
+Idle: Sitting Idle (loop)
+Warm: Sitting Talking
+Analytical: Asking Question
+Challenging: Angry Gesture

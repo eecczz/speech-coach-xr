@@ -73,6 +73,8 @@ services:
       JEONBUK_API_KEY: ${JEONBUK_API_KEY:-}
       JEONBUK_BASE_URL: ${JEONBUK_BASE_URL:-https://ai.jb.go.kr/student-api/v1}
       JEONBUK_CHAT_MODEL: ${JEONBUK_CHAT_MODEL:-gemma-4-31b-turbo}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-koreacentral}
 
 volumes:
   whisper-cache:

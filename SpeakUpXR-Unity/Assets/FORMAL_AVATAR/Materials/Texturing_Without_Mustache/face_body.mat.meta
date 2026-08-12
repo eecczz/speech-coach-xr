@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d073c795a7d7df94db8ebfde89c92d72
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 249988
+  packageName: Formal character
+  packageVersion: 1.0
+  assetPath: Assets/FORMAL_AVATAR/Materials/Texturing_Without_Mustache/face_body.mat
+  uploadId: 596314

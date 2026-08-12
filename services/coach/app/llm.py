@@ -642,6 +642,8 @@ def generate(bundle: SessionBundle) -> ComprehensiveReport:
 
 
 def provider_info() -> dict:
+    if PROVIDER == "mock":
+        return {"provider": "mock", "model": "local-demo"}
     if PROVIDER == "claude":
         return {"provider": "claude", "model": CLAUDE_MODEL}
     if PROVIDER == "jeonbuk":

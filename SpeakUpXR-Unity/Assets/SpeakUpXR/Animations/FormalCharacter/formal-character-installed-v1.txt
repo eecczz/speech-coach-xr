@@ -1,0 +1,2 @@
+Formal Character source: Assets/FORMAL_AVATAR/Animations/A@Greet.fbx
+Three scene-authored instances use looping SeatedIdle.controller.

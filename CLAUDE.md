@@ -16,27 +16,29 @@ AI 가상 면접관 기반 몰입형 면접 코칭 앱. **마감 2026-08-27** (�
 | `services/coach/` | FastAPI 백엔드 (`/interview/next`, `/interview/report`) — 그대로 사용 |
 | `apps/web/` | 구 WebXR 프로토타입 — **레퍼런스 전용, 수정 금지** |
 
-## 현재 상태 (2026-07-27)
+## 현재 상태 (2026-08-11)
 
-- ✅ 다대다 면접 씬: 역할별 면접관 4인 패널(인사/직무/기술/임원, kind별로 담당자가 발화),
-  지원자석 3석(사용자 중앙 + 좌우 NPC), 채광창 있는 10×6.8m 룸 — `SceneBootstrap.Build()`로 재생성
+- ✅ 씬 배치형 3인 패널: 따뜻한 인사 / 분석적 실무 / 압박형 임원. 캐릭터·좌석·음성 프로필을 Inspector에서 직접 교체
+- ✅ 문 입장 → 착석의 가벼운 컷신, 질문/녹음 답변/STT·운율 분석, 성격별 짧은 반응과 적응형 꼬리질문
+- ✅ 서버 프록시 Azure 한국어 TTS + 실제 오디오 파형 기반 립싱크, 키가 없을 때 자막 타이밍 폴백
+- ✅ 종료 인사 후 `timeScale=0`, 비동기 리포트 로딩 및 월드 리포트 표시
 - ✅ Quest APK 빌드 통과 (`XrSetup.BuildApk` → `Builds/SpeakUpXR.apk`, 45MB)
 - ✅ mock 백엔드 E2E (에디터 Play: Space=시작, Enter=답변, 우클릭 드래그=시점)
-- ⏳ 다음: STT/음성 연동 → Quest 실기 테스트 → 리포트 UI → 아트 조립(에셋 스토어 환경 + 역할별 VRM)
+- ⏳ 다음: 역할별 상용 VRM/FBX와 면접장 에셋으로 placeholder 교체 → Quest 실기 테스트 → 시각 품질 조정
 
 ## 실행 방법
 
 - 백엔드(mock, 키 불필요): `services/coach`에서 Windows `.\run.ps1` / macOS `./run.sh`
-- 씬 재생성: 에디터 메뉴 **SpeakUpXR → Build Interview Scene** (씬은 코드가 소스 오브 트루스)
+- 최초/초기화용 씬 생성: **SpeakUpXR → Create Editable Interview Scene**. 생성 후에는 `Interview.unity`가 소스 오브 트루스이며 씬을 직접 편집
 - XR/플레이어 설정 일괄 적용: `-executeMethod XrSetup.Configure -buildTarget Android` (배치)
 - APK: `-executeMethod XrSetup.BuildApk` (배치, `-quit` 없이 — 스스로 Exit)
 
 ## 조심할 것
 
-- 아바타는 `StreamingAssets/default.vrm` 한 파일을 6명이 공유 — 외형은
-  `InterviewerController`의 HairTint/OutfitTint/BodyScale로 변주 중. 모델 확보 시 `VrmFileName`만 교체
+- 캐릭터는 런타임에 로드하지 않는다. 씬의 `SLOT_1..3` 아래 `AvatarRoot`를 VRM/FBX 프리팹으로 교체하고
+  `InterviewerController.AvatarRoot`만 다시 연결한다. 좌석/성격/TTS/AI 라우팅은 슬롯에 남는다.
 - UniVRM 0.129.x: `LookAtTargetTypes`는 `VRM10ObjectLookAt` 안의 중첩 enum
 - OpenXR 빌드 검증: **Linear 색공간 + Vulkan 단독** 아니면 빌드 실패 (Gamma+GLES 거부)
-- 착석은 서 있는 리그를 -0.34m 가라앉힌 임시 처리 — 제대로 된 착석 포즈 TODO
+- 현재 캐릭터는 씬에서 보이는 placeholder. 실제 모델에는 앉기 애니메이션/포즈를 적용한다.
 - 스크립트 수정 시 `unity-staging/`에도 복사해 동기화 유지
 - `.env`/API 키는 공유 PC에 두지 않는다. LLM은 당분간 `LLM_PROVIDER=mock`
