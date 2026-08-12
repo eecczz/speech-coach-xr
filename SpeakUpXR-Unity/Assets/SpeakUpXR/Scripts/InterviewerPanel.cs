@@ -1,47 +1,56 @@
-// 다대다 면접 패널 — 질문 kind에 따라 담당 면접관이 말하고, 나머지는 대기 자세를 유지한다.
-// kind 매핑: base=인사, followup=직무, pressure=기술, closing=임원(마지막 멤버). 그 외는 인사.
-
+using System.Collections;
 using UnityEngine;
 
 namespace SpeakUpXR
 {
     public class InterviewerPanel : MonoBehaviour
     {
-        public InterviewerController[] Members = new InterviewerController[0];
+        [Tooltip("Exactly three scene-placed characters: warm, analytical, challenging")]
+        public InterviewerController[] Members = new InterviewerController[3];
+        public InterviewerController ActiveSpeaker { get; private set; }
 
-        public int IndexForKind(string kind)
+        public InterviewerController Find(string personaId, string kind = null)
         {
-            int i = kind switch
+            if (!string.IsNullOrWhiteSpace(personaId))
+                foreach (var member in Members)
+                    if (member && member.PersonaId == personaId) return member;
+
+            var fallback = kind == "pressure" ? InterviewerPersonality.Challenging
+                : kind == "followup" ? InterviewerPersonality.Analytical
+                : InterviewerPersonality.Warm;
+            foreach (var member in Members)
+                if (member && member.Personality == fallback) return member;
+            foreach (var member in Members) if (member) return member;
+            return null;
+        }
+
+        public IEnumerator SpeakLine(CoachApi api, string line, string speakerId, string kind, string tone = "neutral")
+        {
+            ActiveSpeaker = Find(speakerId, kind);
+            if (ActiveSpeaker) yield return ActiveSpeaker.Speak(api, line, tone);
+            else
             {
-                "base" => 0,
-                "followup" => 1,
-                "pressure" => 2,
-                "closing" => Members.Length - 1,
-                _ => 0,
-            };
-            return Mathf.Clamp(i, 0, Mathf.Max(0, Members.Length - 1));
+                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.3f + line.Length * 0.055f, 1.8f, 12f);
+                while (Time.realtimeSinceStartup < end) yield return null;
+            }
+            ActiveSpeaker = null;
         }
 
-        /// <summary>kind 담당 면접관만 입을 움직인다.</summary>
-        public void BeginSpeaking(string kind)
-        {
-            int active = IndexForKind(kind);
-            for (int i = 0; i < Members.Length; i++)
-                if (Members[i]) Members[i].SetSpeaking(i == active);
-        }
-
-        public void EndSpeaking()
-        {
-            foreach (var m in Members)
-                if (m) m.SetSpeaking(false);
-        }
-
-        /// <summary>답변을 들은 뒤 아무나 한 명이 끄덕인다.</summary>
         public void NodRandom()
         {
-            if (Members.Length == 0) return;
-            var m = Members[Random.Range(0, Members.Length)];
-            if (m) m.Nod();
+            if (Members == null || Members.Length == 0) return;
+            for (int tries = 0; tries < Members.Length; tries++)
+            {
+                var member = Members[Random.Range(0, Members.Length)];
+                if (member) { member.Nod(); return; }
+            }
+        }
+
+        public Transform[] GazeTargets()
+        {
+            var result = new Transform[Members.Length];
+            for (int i = 0; i < Members.Length; i++) result[i] = Members[i] ? Members[i].GazePoint : null;
+            return result;
         }
     }
 }

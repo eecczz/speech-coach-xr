@@ -36,6 +36,18 @@ SpeakUpXR-Unity/Builds/
 SpeakUpXR-Unity/*.csproj
 SpeakUpXR-Unity/*.sln
 
+# Unity / asset import working files
+*.log
+*.unitypackage
+pkg-inspect/
+ThirdPartySources/
+SpeakUpXR-Unity/Assets/ThirdParty/
+SpeakUpXR-Unity/Assets/ThirdParty.meta
+SpeakUpXR-Unity/Assets/FORMAL_AVATAR/
+SpeakUpXR-Unity/Assets/FORMAL_AVATAR.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations.meta
+
 # IDE / OS
 .vscode/
 .idea/

@@ -9,6 +9,7 @@ import time
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from packages.schema import (
     SignalWindow,
@@ -27,6 +28,7 @@ from .interview import (
     generate_next_question,
     generate_interview_report,
 )
+from .tts import TtsRequest, synthesize_audio
 
 app = FastAPI(title="Presentation Coach")
 
@@ -183,3 +185,14 @@ async def interview_report(req: InterviewReportRequest):
         return JSONResponse(
             {"error": f"{type(e).__name__}: {e}"}, status_code=502
         )
+
+
+@app.post("/interview/tts")
+async def interview_tts(req: TtsRequest):
+    """Synthesize one panel utterance as 24 kHz mono WAV."""
+    try:
+        return Response(await synthesize_audio(req), media_type="audio/mpeg")
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)

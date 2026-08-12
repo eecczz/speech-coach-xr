@@ -1,155 +1,207 @@
-// VRM interviewer — C# port of interviewer.ts (gaze, blink, breathing, mouth, nod).
-// Loads default.vrm from StreamingAssets at runtime through the VRM10 importer with
-// canLoadVrm0X, so one code path covers VRM 0.x and 1.0 (0.x is auto-migrated).
-
+using System;
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Networking;
 using UniVRM10;
 
 namespace SpeakUpXR
 {
+    public enum InterviewerPersonality { Warm, Analytical, Challenging }
+
+    [Serializable]
+    public class InterviewerVoice
+    {
+        [Tooltip("Azure Korean neural voice name")]
+        public string VoiceName = "ko-KR-SunHiNeural";
+        [Range(-30, 30)] public int RatePercent;
+        [Range(-20, 20)] public int PitchPercent;
+    }
+
+    /// <summary>
+    /// Controls a character already placed in the scene. It never loads or creates an
+    /// avatar at runtime. Replace AvatarRoot in the Inspector to swap a character while
+    /// preserving the seat, personality, TTS voice and session wiring.
+    /// </summary>
+    [DisallowMultipleComponent]
     public class InterviewerController : MonoBehaviour
     {
-        [Tooltip("VRM file name inside StreamingAssets")]
-        public string VrmFileName = "default.vrm";
-        [Tooltip("Where the interviewer looks (the user's head camera)")]
-        public Transform LookTarget;
+        [Header("Identity / routing")]
+        public string PersonaId = "warm";
+        public string DisplayName = "인사 면접관";
+        public InterviewerPersonality Personality = InterviewerPersonality.Warm;
+        public InterviewerVoice Voice = new();
 
-        [Header("Variant — 같은 VRM을 쓰는 동안 클론 느낌 제거")]
-        public Color HairTint = Color.white;
-        public Color OutfitTint = Color.white;
-        [Range(0.9f, 1.1f)] public float BodyScale = 1f;
+        [Header("Scene references (all author-time objects)")]
+        public GameObject AvatarRoot;
+        public Transform LookTarget;
+        [Tooltip("Optional mouth transform for non-VRM placeholder characters")]
+        public Transform PlaceholderMouth;
+        public AudioSource VoiceSource;
 
         private Vrm10Instance _vrm;
+        private Animator _animator;
         private Transform _neck;
         private Transform _chest;
-        private Quaternion _neckBase, _chestBase;
-
+        private Quaternion _neckBase;
+        private Quaternion _chestBase;
+        private Vector3 _mouthBaseScale;
+        private Vector3 _staticAvatarBasePosition;
+        private Quaternion _staticAvatarBaseRotation;
+        private bool _isStaticAvatar;
         private bool _speaking;
-        private float _nodT = -1f;
-        private float _blinkT, _blinkNext = 2.5f;
+        private float _nodTime = -1f;
+        private float _blinkTime;
+        private float _nextBlink;
         private float _clock;
+        private readonly float[] _samples = new float[128];
 
-        private IEnumerator Start()
+        private static readonly int IsSpeakingParameter = Animator.StringToHash("IsSpeaking");
+        private static readonly int GestureStyleParameter = Animator.StringToHash("GestureStyle");
+
+        public Transform GazePoint => _neck ? _neck : (AvatarRoot ? AvatarRoot.transform : transform);
+
+        private void Awake()
         {
-            // UnityWebRequest works for StreamingAssets on both macOS editor and Android APK.
-            var url = System.IO.Path.Combine(Application.streamingAssetsPath, VrmFileName);
-            if (!url.Contains("://")) url = "file://" + url;
-            using var www = UnityWebRequest.Get(url);
-            yield return www.SendWebRequest();
-            if (www.result != UnityWebRequest.Result.Success)
+            if (!AvatarRoot && transform.childCount > 0) AvatarRoot = transform.GetChild(0).gameObject;
+            if (!VoiceSource) VoiceSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+            VoiceSource.spatialBlend = 1f;
+            VoiceSource.rolloffMode = AudioRolloffMode.Linear;
+            VoiceSource.minDistance = 0.6f;
+            VoiceSource.maxDistance = 8f;
+
+            _vrm = AvatarRoot ? AvatarRoot.GetComponentInChildren<Vrm10Instance>(true) : null;
+            _animator = AvatarRoot ? AvatarRoot.GetComponentInChildren<Animator>(true) : null;
+            _isStaticAvatar = AvatarRoot && !_vrm && !_animator;
+            if (_isStaticAvatar)
             {
-                Debug.LogError($"[interviewer] VRM load failed: {www.error}");
-                yield break;
+                _staticAvatarBasePosition = AvatarRoot.transform.localPosition;
+                _staticAvatarBaseRotation = AvatarRoot.transform.localRotation;
             }
-
-            var task = Vrm10.LoadBytesAsync(www.downloadHandler.data, canLoadVrm0X: true);
-            while (!task.IsCompleted) yield return null;
-            _vrm = task.Result;
-            var root = _vrm.gameObject;
-            root.name = "Interviewer";
-            root.transform.SetParent(transform, false);
-            // Parent (this GameObject) is placed/rotated by SceneBootstrap.
-
-            var anim = root.GetComponent<Animator>();
-            _neck = anim ? anim.GetBoneTransform(HumanBodyBones.Neck) : null;
-            _chest = anim ? anim.GetBoneTransform(HumanBodyBones.Chest)
-                          ?? anim.GetBoneTransform(HumanBodyBones.Spine) : null;
+            if (_animator)
+            {
+                _neck = _animator.GetBoneTransform(HumanBodyBones.Neck);
+                _chest = _animator.GetBoneTransform(HumanBodyBones.Chest) ?? _animator.GetBoneTransform(HumanBodyBones.Spine);
+                if (HasAnimatorParameter(GestureStyleParameter, AnimatorControllerParameterType.Int))
+                {
+                    int gestureStyle = Personality == InterviewerPersonality.Challenging
+                        ? 2
+                        : Personality == InterviewerPersonality.Analytical ? 1 : 0;
+                    _animator.SetInteger(GestureStyleParameter, gestureStyle);
+                }
+            }
             if (_neck) _neckBase = _neck.localRotation;
             if (_chest) _chestBase = _chest.localRotation;
+            if (PlaceholderMouth) _mouthBaseScale = PlaceholderMouth.localScale;
+            _nextBlink = UnityEngine.Random.Range(1.5f, 4.5f);
 
-            ApplyRestingPose(anim);
-            _blinkNext = Random.Range(1.5f, 4.5f); // 패널 멤버끼리 눈 깜빡임 비동기화
-            transform.localScale = Vector3.one * BodyScale;
-            ApplyVariant(root);
-
-            if (LookTarget != null)
+            if (_vrm && LookTarget)
             {
                 _vrm.LookAtTargetType = VRM10ObjectLookAt.LookAtTargetTypes.SpecifiedTransform;
                 _vrm.LookAtTarget = LookTarget;
             }
         }
 
-        /// <summary>머리/의상 재질을 이름 기반으로 찾아 틴트 — VRM 교체 전까지의 클론 차별화.</summary>
-        private void ApplyVariant(GameObject root)
+        public IEnumerator Speak(CoachApi api, string text, string tone)
         {
-            if (HairTint == Color.white && OutfitTint == Color.white) return;
-            int hair = 0, outfit = 0;
-            foreach (var r in root.GetComponentsInChildren<Renderer>())
+            AudioClip clip = null;
+            string error = null;
+            if (api) yield return api.Synthesize(text, Voice, tone, value => clip = value, value => error = value);
+            SetSpeaking(true);
+            if (clip && VoiceSource)
             {
-                foreach (var m in r.materials) // 인스턴스 재질 — 아바타별 개별 틴트
-                {
-                    if (!m || !m.HasProperty("_Color")) continue;
-                    var n = m.name.ToLowerInvariant();
-                    if (n.Contains("hair"))
-                    {
-                        m.color = Color.Lerp(m.color, HairTint, 0.6f);
-                        hair++;
-                    }
-                    else if (n.Contains("cloth") || n.Contains("tops") || n.Contains("bottoms")
-                          || n.Contains("jacket") || n.Contains("suit") || n.Contains("shoe")
-                          || n.Contains("accessor"))
-                    {
-                        m.color = Color.Lerp(m.color, OutfitTint, 0.55f);
-                        outfit++;
-                    }
-                }
+                VoiceSource.clip = clip;
+                VoiceSource.Play();
+                while (VoiceSource.isPlaying) yield return null;
             }
-            Debug.Log($"[interviewer] variant applied: hair×{hair}, outfit×{outfit} ({name})");
+            else
+            {
+                if (!string.IsNullOrEmpty(error)) Debug.LogWarning($"[{DisplayName}] {error}; subtitle timing fallback");
+                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.3f + text.Length * 0.055f, 1.8f, 12f);
+                while (Time.realtimeSinceStartup < end) yield return null;
+            }
+            SetSpeaking(false);
+            if (VoiceSource) VoiceSource.clip = null;
         }
 
-        /// <summary>Drop arms from T-pose to a natural resting posture (port of applyRestingPose).</summary>
-        private static void ApplyRestingPose(Animator anim)
+        public void StopSpeaking()
         {
-            if (!anim) return;
-            Rotate(anim, HumanBodyBones.LeftUpperArm, 0, 0, 75f);
-            Rotate(anim, HumanBodyBones.RightUpperArm, 0, 0, -75f);
-            Rotate(anim, HumanBodyBones.LeftLowerArm, 12f, 0, 0);
-            Rotate(anim, HumanBodyBones.RightLowerArm, 12f, 0, 0);
+            SetSpeaking(false);
+            if (VoiceSource) VoiceSource.Stop();
         }
 
-        private static void Rotate(Animator anim, HumanBodyBones bone, float x, float y, float z)
+        private void SetSpeaking(bool value)
         {
-            var t = anim.GetBoneTransform(bone);
-            if (t) t.localRotation *= Quaternion.Euler(x, y, z);
+            _speaking = value;
+            if (_animator && HasAnimatorParameter(IsSpeakingParameter, AnimatorControllerParameterType.Bool))
+                _animator.SetBool(IsSpeakingParameter, value);
         }
 
-        public void SetSpeaking(bool on) => _speaking = on;
-        public void Nod() => _nodT = 0f;
+        private bool HasAnimatorParameter(int nameHash, AnimatorControllerParameterType type)
+        {
+            if (!_animator || !_animator.runtimeAnimatorController) return false;
+            foreach (var parameter in _animator.parameters)
+                if (parameter.nameHash == nameHash && parameter.type == type) return true;
+            return false;
+        }
+
+        public void Nod() => _nodTime = 0f;
 
         private void LateUpdate()
         {
-            if (_vrm == null) return;
-            var dt = Time.deltaTime;
+            float dt = Time.unscaledDeltaTime;
             _clock += dt;
-
-            // Breathing — subtle chest pitch oscillation.
             if (_chest) _chest.localRotation = _chestBase * Quaternion.Euler(Mathf.Sin(_clock * 1.4f) * 0.7f, 0, 0);
 
-            // Acknowledging nod (~0.6s dip).
-            if (_nodT >= 0f)
+            // Restrained fallback motion for a scene-authored character without a rig.
+            if (_isStaticAvatar && AvatarRoot)
             {
-                _nodT += dt;
-                float dip = Mathf.Sin(Mathf.Clamp01(_nodT / 0.6f) * Mathf.PI);
+                float breathe = Mathf.Sin(_clock * 1.35f);
+                float attention = _speaking ? 1f : 0f;
+                AvatarRoot.transform.localPosition = _staticAvatarBasePosition
+                    + new Vector3(0f, breathe * 0.0035f, attention * -0.018f);
+                AvatarRoot.transform.localRotation = _staticAvatarBaseRotation
+                    * Quaternion.Euler(breathe * 0.35f + attention * 1.25f, Mathf.Sin(_clock * 0.43f) * 0.45f, 0f);
+            }
+
+            if (_nodTime >= 0f)
+            {
+                _nodTime += dt;
+                float dip = Mathf.Sin(Mathf.Clamp01(_nodTime / 0.6f) * Mathf.PI);
                 if (_neck) _neck.localRotation = _neckBase * Quaternion.Euler(dip * 10f, 0, 0);
-                if (_nodT >= 0.6f) { _nodT = -1f; if (_neck) _neck.localRotation = _neckBase; }
+                else if (_isStaticAvatar && AvatarRoot)
+                    AvatarRoot.transform.localRotation = _staticAvatarBaseRotation * Quaternion.Euler(dip * 7f, 0f, 0f);
+                if (_nodTime >= 0.6f) { _nodTime = -1f; if (_neck) _neck.localRotation = _neckBase; }
             }
 
-            // Talking mouth + periodic blink via VRM expressions.
-            var expr = _vrm.Runtime.Expression;
-            float mouth = _speaking ? (Mathf.Sin(_clock * 14f) * 0.5f + 0.5f) * 0.7f : 0f;
-            expr.SetWeight(ExpressionKey.Aa, mouth);
+            float mouth = GetMouthWeight();
+            if (_vrm) _vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa, mouth);
+            if (PlaceholderMouth)
+                PlaceholderMouth.localScale = new Vector3(_mouthBaseScale.x, _mouthBaseScale.y * Mathf.Lerp(0.35f, 1.5f, mouth), _mouthBaseScale.z);
 
-            _blinkT += dt;
-            float blink = 0f;
-            if (_blinkT > _blinkNext)
+            if (_vrm)
             {
-                float p = (_blinkT - _blinkNext) / 0.12f;
-                blink = p < 1f ? Mathf.Sin(p * Mathf.PI) : 0f;
-                if (p >= 1f) { _blinkT = 0f; _blinkNext = Random.Range(2f, 5f); }
+                _blinkTime += dt;
+                float blink = 0f;
+                if (_blinkTime > _nextBlink)
+                {
+                    float p = (_blinkTime - _nextBlink) / 0.12f;
+                    blink = p < 1f ? Mathf.Sin(p * Mathf.PI) : 0f;
+                    if (p >= 1f) { _blinkTime = 0f; _nextBlink = UnityEngine.Random.Range(2f, 5f); }
+                }
+                _vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink, blink);
             }
-            expr.SetWeight(ExpressionKey.Blink, blink);
+        }
+
+        private float GetMouthWeight()
+        {
+            if (!_speaking) return 0f;
+            if (VoiceSource && VoiceSource.isPlaying)
+            {
+                VoiceSource.GetOutputData(_samples, 0);
+                float rms = 0f;
+                foreach (float sample in _samples) rms += sample * sample;
+                return Mathf.Clamp01(Mathf.Sqrt(rms / _samples.Length) * 12f);
+            }
+            return (Mathf.Sin(_clock * 14f) * 0.5f + 0.5f) * 0.7f;
         }
     }
 }
