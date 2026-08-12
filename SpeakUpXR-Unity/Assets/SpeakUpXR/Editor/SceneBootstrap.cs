@@ -275,7 +275,7 @@ public static class SceneBootstrap
         var canvasObject = new GameObject("NamePlate_" + label);
         canvasObject.transform.SetParent(parent, false);
         canvasObject.transform.localPosition = position;
-        canvasObject.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+        canvasObject.transform.localRotation = Quaternion.identity;
         var canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(420, 90);
