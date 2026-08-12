@@ -13,6 +13,7 @@ namespace SpeakUpXR
         public Text QuestionText;
         public Text StatusText;
         public Text InterimText;
+        public Text SpeakerText;
         public Image StatusPill;
 
         private static readonly Color AskColor = new(0.43f, 0.66f, 1f);
@@ -24,6 +25,11 @@ namespace SpeakUpXR
         {
             if (QuestionText) QuestionText.text = text;
             SetInterim("");
+        }
+
+        public void SetSpeaker(string text)
+        {
+            if (SpeakerText) SpeakerText.text = text;
         }
 
         public void SetStatus(string text, HudTone tone)

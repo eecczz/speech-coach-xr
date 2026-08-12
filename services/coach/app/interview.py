@@ -1,17 +1,4 @@
-"""Interview brain — the AI interviewer's next-question generator + a light,
-text-only end-of-interview report.
-
-This is the XR interview counterpart to agent.py. Where agent.py reacts to a
-practicing speaker with tiny nudges, here the model *plays the interviewer*:
-given the running Q&A history it produces the next question — a probing
-follow-up, a pressure question, or the next base question — scaled to the
-requested difficulty. The end-of-interview report evaluates answer structure
-(직접성·근거·사례/STAR·결론) from the transcript alone; multimodal (gaze/posture)
-scoring is layered on later once the XR signal pipeline (Stage 3) feeds in.
-
-Provider routing mirrors agent.py: jeonbuk (OpenAI-compatible) | gemini | claude.
-Safety: education-only feedback, never a 합격/불합격 verdict, and no invented facts.
-"""
+"""AI interviewer question routing and the text portion of the final report."""
 
 from __future__ import annotations
 
@@ -21,8 +8,6 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-# ── Shared models ─────────────────────────────────────────────────
-
 QuestionKind = Literal["base", "followup", "pressure", "closing"]
 
 
@@ -30,30 +15,33 @@ class QAExchange(BaseModel):
     question: str
     answer: str = ""
     kind: str = "base"
+    wpm: Optional[float] = None
+    filler_count: int = 0
+    gaze_ratio: Optional[float] = None
+    gaze_switches: int = 0
 
 
 class InterviewConfig(BaseModel):
-    # 직무/분야 — 질문 톤을 잡는 데 사용 (1차 시연은 "신입 공통 인성").
     job_role: str = "신입 공통 인성"
-    # 기업 유형/세션명 등 상황 (선택).
     situation: str = ""
-    # 쉬움 | 보통 | 어려움 — 압박 강도와 꼬리질문 깊이를 조절.
     difficulty: Literal["쉬움", "보통", "어려움"] = "보통"
 
 
 class InterviewNextRequest(BaseModel):
     config: InterviewConfig = Field(default_factory=InterviewConfig)
     history: List[QAExchange] = Field(default_factory=list)
-    # 지금까지 물어본 질문 수(인트로 제외). 서버가 이 값으로 종료 시점을 강제한다.
     asked_count: int = 0
     max_questions: int = 6
 
 
 class InterviewNextResponse(BaseModel):
-    # 다음 질문. done=true면 null.
     question: Optional[str] = None
     kind: QuestionKind = "base"
     done: bool = False
+    reaction: Optional[str] = None
+    reaction_tone: Optional[Literal["warm", "neutral", "challenging"]] = None
+    reaction_speaker: Optional[Literal["warm", "analytical", "challenging"]] = None
+    question_speaker: Literal["warm", "analytical", "challenging"] = "analytical"
 
 
 class InterviewReportRequest(BaseModel):
@@ -64,7 +52,7 @@ class InterviewReportRequest(BaseModel):
 class PerQuestionEval(BaseModel):
     question: str
     comment: str
-    star: bool = False  # 답변이 STAR(상황-과제-행동-결과) 구조를 갖췄는지
+    star: bool = False
 
 
 class InterviewReportResponse(BaseModel):
@@ -74,79 +62,75 @@ class InterviewReportResponse(BaseModel):
     per_question: List[PerQuestionEval] = Field(default_factory=list)
 
 
-# ── Prompt builders ───────────────────────────────────────────────
-
-_SAFETY = (
-    "안전장치: 당신의 출력은 채용 합격/불합격 판정이 아니라 교육용 연습 피드백입니다. "
-    "지원자가 말하지 않은 사실을 지어내지 말고, 전사(STT) 텍스트에 근거해서만 판단하세요."
-)
-
-
 def _next_system_prompt(cfg: InterviewConfig) -> str:
-    situation = f" 상황/기업유형: '{cfg.situation}'." if cfg.situation.strip() else ""
+    situation = f" 상황/기업 유형: '{cfg.situation}'." if cfg.situation.strip() else ""
     pressure = {
-        "쉬움": "압박 질문은 피하고, 지원자가 편하게 풀어낼 수 있는 기본/꼬리 질문 위주로.",
-        "보통": "대체로 기본·꼬리 질문. 답변이 두루뭉술하면 한 번씩 가볍게 압박.",
-        "어려움": "답변의 허점을 파고드는 꼬리·압박 질문을 적극적으로. 단, 무례하지 않게.",
+        "쉬움": "편안한 기본 질문 위주로 진행하고 압박 표현은 쓰지 마세요.",
+        "보통": "기본 질문과 답변에 근거한 꼬리 질문을 균형 있게 사용하세요.",
+        "어려움": "답변의 빈틈을 확인하는 꼬리·압박 질문을 사용하되 무례하게 말하지 마세요.",
     }[cfg.difficulty]
-    return (
-        "당신은 채용 면접의 면접관입니다. 지원자와 1:1 인성 면접을 진행합니다. "
-        f"직무/분야: '{cfg.job_role}'.{situation}\n"
-        f"난이도: {cfg.difficulty}. {pressure}\n"
-        "질문 원칙:\n"
-        "- 직전 답변을 실제로 반영해서 다음 질문을 만드세요. 답변이 추상적이면 구체적 사례를, "
-        "사례가 나오면 STAR(상황·과제·행동·결과) 중 빠진 부분을 파고드세요.\n"
-        "- 같은 질문을 반복하지 마세요. 이미 물어본 주제는 피하세요.\n"
-        "- 질문은 한국어 존댓말, 한 번에 하나, 두 문장 이내로 간결하게.\n"
-        f"{_SAFETY}\n"
-        '응답 형식(JSON): {"question": "다음 질문 텍스트", "kind": "base|followup|pressure"}'
-    )
+    return f"""당신은 실제 채용 면접의 세 명 면접관 패널입니다.
+지원 분야: '{cfg.job_role}'.{situation}
+난이도: {cfg.difficulty}. {pressure}
+
+직전 답변을 반영하여 다음 질문 하나를 한국어 두 문장 이내로 만드세요.
+- 추상적인 답변에는 구체적 사례를 묻고, 사례에는 STAR(상황·과제·행동·결과) 중 빠진 부분을 물으세요.
+- 같은 질문이나 이미 답한 주제를 반복하지 마세요.
+- 짧은 반응이 자연스러울 때만 reaction을 작성하세요. 반응은 평가표 문구가 아니라 실제 면접관의 한마디여야 합니다.
+- 칭찬·안심 반응은 warm, 사실 확인과 꼬리 질문은 analytical, 빠른 말·시선 불안·답변의 빈틈 지적은 challenging에게 배정하세요.
+- 지원자가 말하지 않은 사실을 만들지 말고, 합격/불합격을 판정하지 마세요.
+
+JSON 형식:
+{{"question":"다음 질문", "kind":"base|followup|pressure", "reaction":"짧은 반응 또는 null", "reaction_tone":"warm|neutral|challenging 또는 null", "reaction_speaker":"warm|analytical|challenging 또는 null", "question_speaker":"warm|analytical|challenging"}}"""
 
 
 def _next_user_prompt(req: InterviewNextRequest) -> str:
-    if req.history:
-        lines = []
-        for i, qa in enumerate(req.history, 1):
-            lines.append(f"Q{i}({qa.kind}): {qa.question}")
-            lines.append(f"A{i}: {qa.answer.strip() or '(무응답)'}")
-        transcript = "\n".join(lines)
-    else:
+    if not req.history:
         transcript = "(아직 대화 없음 — 첫 질문)"
-    return (
-        f"지금까지의 면접 대화:\n{transcript}\n\n"
-        f"물어본 질문 수: {req.asked_count}/{req.max_questions}.\n"
-        "위 흐름을 반영해 다음 질문 하나를 JSON으로 생성하세요."
-    )
+    else:
+        lines: list[str] = []
+        for index, qa in enumerate(req.history, 1):
+            lines.extend((f"Q{index}({qa.kind}): {qa.question}", f"A{index}: {qa.answer.strip() or '(무응답)'}"))
+            metrics: list[str] = []
+            if qa.wpm is not None:
+                metrics.append(f"말속도 {qa.wpm:.0f}WPM")
+            if qa.filler_count:
+                metrics.append(f"필러 {qa.filler_count}회")
+            if qa.gaze_ratio is not None:
+                metrics.append(f"질문자 응시 {qa.gaze_ratio * 100:.0f}%")
+            if qa.gaze_switches:
+                metrics.append(f"시선 전환 {qa.gaze_switches}회")
+            if metrics:
+                lines.append("관찰: " + ", ".join(metrics))
+        transcript = "\n".join(lines)
+    return f"현재까지 면접:\n{transcript}\n\n질문 수: {req.asked_count}/{req.max_questions}. 다음 질문을 JSON으로 작성하세요."
 
 
 def _report_system_prompt(cfg: InterviewConfig) -> str:
-    return (
-        "당신은 면접 코치입니다. 아래 1:1 인성 면접 전사를 바탕으로 지원자의 "
-        "'답변 내용·구조'를 평가하는 교육용 리포트를 작성합니다. "
-        f"직무/분야: '{cfg.job_role}'.\n"
-        "평가 기준: 질문에 직접 답했는지, 근거를 들었는지, 구체적 사례가 있는지, "
-        "STAR(상황·과제·행동·결과) 구조인지, 결론이 명료한지.\n"
-        f"{_SAFETY}\n"
-        "이 리포트는 언어(답변) 측면만 다룹니다. 시선·자세 등 비언어 평가는 별도 단계에서 결합됩니다.\n"
-        '응답 형식(JSON): {"overall_summary": string, "strengths": string[], '
-        '"improvements": string[], "per_question": [{"question": string, '
-        '"comment": string, "star": boolean}]}'
-    )
+    return f"""당신은 면접 코치입니다. 지원 분야는 '{cfg.job_role}'입니다.
+답변 내용과 구조, 구체적 근거, STAR 구성, 결론의 명확성을 평가하세요.
+제공된 말속도·필러·질문자 응시 관찰도 함께 반영하되 관찰하지 않은 사실은 만들지 마세요.
+합격/불합격을 판정하지 말고 연습을 위한 구체적인 피드백을 한국어로 작성하세요.
+JSON 형식: {{"overall_summary":string,"strengths":string[],"improvements":string[],"per_question":[{{"question":string,"comment":string,"star":boolean}}]}}"""
 
 
 def _report_user_prompt(req: InterviewReportRequest) -> str:
-    lines = []
-    for i, qa in enumerate(req.history, 1):
-        lines.append(f"Q{i}: {qa.question}")
-        lines.append(f"A{i}: {qa.answer.strip() or '(무응답)'}")
-    return (
-        "면접 전사:\n" + "\n".join(lines) + "\n\n"
-        "각 답변을 평가 기준으로 검토하고, 전체 총평·강점·개선점과 "
-        "질문별 코멘트를 JSON으로 작성하세요."
-    )
+    lines: list[str] = []
+    for index, qa in enumerate(req.history, 1):
+        lines.extend((f"Q{index}: {qa.question}", f"A{index}: {qa.answer.strip() or '(무응답)'}"))
+        metrics: list[str] = []
+        if qa.wpm is not None:
+            metrics.append(f"말속도 {qa.wpm:.0f}WPM")
+        if qa.filler_count:
+            metrics.append(f"필러 {qa.filler_count}회")
+        if qa.gaze_ratio is not None:
+            metrics.append(f"질문자 응시 {qa.gaze_ratio * 100:.0f}%")
+        if qa.gaze_switches:
+            metrics.append(f"시선 전환 {qa.gaze_switches}회")
+        if metrics:
+            lines.append("관찰: " + ", ".join(metrics))
+    return "면접 기록:\n" + "\n".join(lines) + "\n\n전체 및 질문별 피드백을 JSON으로 작성하세요."
 
-
-# ── Provider routing (mirrors agent.py) ───────────────────────────
 
 def _provider() -> str:
     return os.environ.get("LLM_PROVIDER", "gemini").lower().strip()
@@ -154,13 +138,11 @@ def _provider() -> str:
 
 def _gemini_json(system: str, user: str, schema: type[BaseModel]):
     from google.genai import types  # type: ignore
-
-    from .llm import _get_gemini, GEMINI_MODEL
+    from .llm import GEMINI_MODEL, _get_gemini
 
     if not os.environ.get("GOOGLE_API_KEY"):
         raise RuntimeError("GOOGLE_API_KEY not set")
-    client = _get_gemini()
-    response = client.models.generate_content(
+    response = _get_gemini().models.generate_content(
         model=GEMINI_MODEL,
         contents=user,
         config=types.GenerateContentConfig(
@@ -171,10 +153,7 @@ def _gemini_json(system: str, user: str, schema: type[BaseModel]):
             max_output_tokens=1200,
         ),
     )
-    parsed = response.parsed  # type: ignore[attr-defined]
-    if parsed is None:
-        return schema.model_validate_json(response.text)
-    return parsed
+    return response.parsed or schema.model_validate_json(response.text)
 
 
 def _jeonbuk_json(system: str, user: str, schema: type[BaseModel]):
@@ -183,97 +162,90 @@ def _jeonbuk_json(system: str, user: str, schema: type[BaseModel]):
     if not os.environ.get("JEONBUK_API_KEY"):
         raise RuntimeError("JEONBUK_API_KEY not set")
     response = _jeonbuk_chat(
-        [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user + "\n\n반드시 위 JSON 형식 하나로만 응답하세요. Markdown 금지."},
-        ],
+        [{"role": "system", "content": system}, {"role": "user", "content": user + "\nJSON만 반환하세요."}],
         temperature=0.6,
     )
-    raw = response.choices[0].message.content or ""
-    raw = raw.strip()
+    raw = (response.choices[0].message.content or "").strip()
     if raw.startswith("```"):
-        raw = raw.split("```", 2)[1] if "```" in raw[3:] else raw
-        raw = raw.lstrip("json").strip().strip("`").strip()
+        raw = raw.split("```", 2)[1].removeprefix("json").strip()
     start, end = raw.find("{"), raw.rfind("}")
-    if start >= 0 and end > start:
-        raw = raw[start : end + 1]
-    return schema.model_validate_json(raw)
+    return schema.model_validate_json(raw[start : end + 1] if start >= 0 and end > start else raw)
 
 
 def _route_json(system: str, user: str, schema: type[BaseModel]):
-    if _provider() == "jeonbuk":
-        return _jeonbuk_json(system, user, schema)
-    return _gemini_json(system, user, schema)
+    return _jeonbuk_json(system, user, schema) if _provider() == "jeonbuk" else _gemini_json(system, user, schema)
 
-
-# ── Mock provider (no API key needed — dev/demo only) ─────────────
-# Lets the whole XR interview loop run end-to-end without a live LLM key. It is
-# NOT the real model: it echoes the candidate's last answer into a templated
-# follow-up so the loop is demoable. Set LLM_PROVIDER=mock to use it.
 
 _MOCK_FOLLOWUPS = (
-    ('방금 "{snippet}"라고 하셨는데, 그 부분을 조금 더 구체적인 사례로 설명해 주시겠어요?', "followup"),
-    ("그 상황에서 본인이 맡은 역할과 실제로 한 행동은 무엇이었나요?", "followup"),
-    ("만약 그 결정을 다시 한다면, 무엇을 다르게 하시겠어요?", "pressure"),
-    ("본인의 강점이 이 직무에서 구체적으로 어떻게 발휘될 수 있을까요?", "base"),
-    ("마지막으로, 입사 후 이루고 싶은 목표가 있다면 말씀해 주세요.", "base"),
+    ('방금 "{snippet}"라고 하셨는데, 그 내용을 보여주는 구체적인 사례를 말씀해 주시겠습니까?', "followup"),
+    ("그 상황에서 본인이 맡은 역할과 실제로 취한 행동은 무엇이었습니까?", "followup"),
+    ("같은 결정을 다시 내려야 한다면 무엇을 다르게 하시겠습니까?", "pressure"),
+    ("본인의 강점이 이 직무에서 성과로 이어진 사례를 설명해 주십시오.", "base"),
+    ("입사 후 이루고 싶은 가장 구체적인 목표는 무엇입니까?", "base"),
 )
 
 
 def _mock_next(req: InterviewNextRequest) -> InterviewNextResponse:
-    idx = min(req.asked_count - 1, len(_MOCK_FOLLOWUPS) - 1)
-    if idx < 0:
-        idx = 0
-    template, kind = _MOCK_FOLLOWUPS[idx]
-    last = req.history[-1].answer.strip() if req.history else ""
+    index = max(0, min(req.asked_count - 1, len(_MOCK_FOLLOWUPS) - 1))
+    template, kind = _MOCK_FOLLOWUPS[index]
+    last_qa = req.history[-1] if req.history else QAExchange(question="", answer="")
+    last = last_qa.answer.strip()
     snippet = (last[:16] + "…") if len(last) > 16 else (last or "말씀하신 내용")
-    return InterviewNextResponse(question=template.format(snippet=snippet), kind=kind, done=False)
+    reaction, tone, speaker = "네, 잘 들었습니다.", "warm", "warm"
+    if (last_qa.wpm or 0) > 170 or last_qa.filler_count >= 4:
+        reaction, tone, speaker = "조금 더 천천히 핵심부터 말씀해 주세요.", "challenging", "challenging"
+    elif (last_qa.gaze_ratio is not None and last_qa.gaze_ratio < 0.55) or last_qa.gaze_switches >= 7:
+        reaction, tone, speaker = "질문자를 보면서 답변을 이어가 주세요.", "challenging", "challenging"
+    elif last and len(last) < 20:
+        reaction, tone, speaker = "조금 더 구체적으로 설명해 주시겠습니까?", "neutral", "analytical"
+    question_speaker = "challenging" if kind == "pressure" else ("analytical" if kind == "followup" else "warm")
+    return InterviewNextResponse(
+        question=template.format(snippet=snippet),
+        kind=kind,
+        reaction=reaction,
+        reaction_tone=tone,
+        reaction_speaker=speaker,
+        question_speaker=question_speaker,
+    )
 
 
 def _mock_report(req: InterviewReportRequest) -> InterviewReportResponse:
-    per_q = [
+    per_question = [
         PerQuestionEval(
             question=qa.question,
-            comment="답변에 결론과 근거가 드러나면 더 설득력이 높아집니다. (mock)",
-            star=len(qa.answer) > 40,
+            comment="답변의 결론과 근거를 더 분명히 연결하면 설득력이 높아집니다.",
+            star=len(qa.answer.strip()) > 40,
         )
         for qa in req.history
     ]
     return InterviewReportResponse(
-        overall_summary="전반적으로 성실하게 답변했습니다. 구체적 사례와 STAR 구조를 보강하면 좋겠습니다. (mock 리포트 — 실제 LLM 키 연결 시 대체됨)",
-        strengths=["질문에 끝까지 답하려는 태도", "차분한 진행"],
-        improvements=["답변에 수치·사례 등 구체 근거 추가", "결론을 먼저 말하는 두괄식 연습"],
-        per_question=per_q,
+        overall_summary="질문에 성실하게 답했습니다. 구체적인 사례와 STAR 구조를 보강하면 답변이 더 선명해집니다.",
+        strengths=["질문의 의도를 따라가려는 태도", "차분한 면접 진행"],
+        improvements=["수치와 역할 등 구체적인 근거 추가", "결론을 먼저 말한 뒤 사례로 뒷받침"],
+        per_question=per_question,
     )
 
 
-# ── Public API ────────────────────────────────────────────────────
-
 def generate_next_question(req: InterviewNextRequest) -> InterviewNextResponse:
-    # Server enforces the hard stop so a chatty model can't run forever.
     if req.asked_count >= req.max_questions:
         return InterviewNextResponse(question=None, kind="closing", done=True)
     if _provider() == "mock":
         return _mock_next(req)
-    result: InterviewNextResponse = _route_json(
-        _next_system_prompt(req.config),
-        _next_user_prompt(req),
-        InterviewNextResponse,
-    )
+    result: InterviewNextResponse = _route_json(_next_system_prompt(req.config), _next_user_prompt(req), InterviewNextResponse)
     result.done = False
     if not result.question or not result.question.strip():
         return InterviewNextResponse(question=None, kind="closing", done=True)
     result.question = result.question.strip()
     if result.kind not in ("base", "followup", "pressure"):
         result.kind = "followup"
+    if result.kind == "pressure":
+        result.question_speaker = "challenging"
+    elif result.kind == "followup" and result.question_speaker == "warm":
+        result.question_speaker = "analytical"
     return result
 
 
 def generate_interview_report(req: InterviewReportRequest) -> InterviewReportResponse:
     if _provider() == "mock":
         return _mock_report(req)
-    return _route_json(
-        _report_system_prompt(req.config),
-        _report_user_prompt(req),
-        InterviewReportResponse,
-    )
+    return _route_json(_report_system_prompt(req.config), _report_user_prompt(req), InterviewReportResponse)
