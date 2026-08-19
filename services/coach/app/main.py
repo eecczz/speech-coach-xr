@@ -1,6 +1,7 @@
 """Coach service — L1 rule engine + L3 LLM comprehensive evaluation.
 
-LLM provider is selected via LLM_PROVIDER env var (gemini | claude). See llm.py.
+LLM provider is selected via LLM_PROVIDER env var
+(nvidia/Kimi | gemini | jeonbuk | claude | mock). See llm.py.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from .interview import (
     InterviewReportResponse,
     generate_next_question,
     generate_interview_report,
+    fallback_interview_report,
 )
 from .tts import TtsRequest, synthesize_audio
 
@@ -182,9 +184,9 @@ async def interview_report(req: InterviewReportRequest):
             f"error={type(e).__name__}: {e}",
             flush=True,
         )
-        return JSONResponse(
-            {"error": f"{type(e).__name__}: {e}"}, status_code=502
-        )
+        # A provider quota/network failure must not strand the frozen XR scene.
+        # Return an evidence-based local report with HTTP 200 so the report UI opens.
+        return fallback_interview_report(req)
 
 
 @app.post("/interview/tts")

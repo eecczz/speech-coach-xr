@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace SpeakUpXR
 {
@@ -30,6 +31,7 @@ namespace SpeakUpXR
         public SessionState State { get; private set; } = SessionState.Idle;
         public event Action<SessionState> OnStateChanged;
         public event Action<List<QAExchange>, InterviewReportResponse> OnFinished;
+        public string CurrentQuestion => _current?.question ?? "";
 
         private readonly List<QAExchange> _history = new();
         private QAExchange _current;
@@ -37,7 +39,6 @@ namespace SpeakUpXR
         private string _sessionId;
 
         private const string IntroLine = "안녕하세요. 지금부터 면접을 시작하겠습니다. 긴장 푸시고 편하게 답변해 주세요.";
-        private const string FirstQuestion = "먼저 간단히 자기소개 부탁드립니다.";
         private const string ClosingWarm = "네, 답변 잘 들었습니다. 오늘 면접에 참여해 주셔서 감사합니다.";
         private const string ClosingExecutive = "수고하셨습니다. 면접은 여기까지입니다. 조심히 나가시면 됩니다.";
 
@@ -46,6 +47,13 @@ namespace SpeakUpXR
             _sessionId = Guid.NewGuid().ToString("N");
             if (!Api) Api = GetComponent<CoachApi>();
             if (!Microphone) Microphone = GetComponent<MicrophoneRecorder>();
+            if (!InterviewLaunchSettings.TryApplyTo(this))
+            {
+                AutoStart = false;
+                enabled = false;
+                Debug.Log("[SpeakUpXR] Interview 씬 직접 실행을 감지해 MainMenu로 이동합니다.");
+                SceneManager.LoadScene("MainMenu");
+            }
         }
 
         private void OnEnable()
@@ -102,12 +110,34 @@ namespace SpeakUpXR
             Hud?.SetQuestion("면접을 시작합니다.");
             Hud?.SetStatus("면접 시작", HudTone.Ask);
             yield return Speak(IntroLine, "warm", "base", "warm");
-            yield return Ask(new InterviewNextResponse
+            yield return GenerateFirstQuestion();
+        }
+
+        private IEnumerator GenerateFirstQuestion()
+        {
+            SetState(SessionState.Thinking);
+            Hud?.SetStatus("지원 분야에 맞는 첫 질문을 준비하는 중", HudTone.Think);
+            InterviewNextResponse next = null;
+            string error = null;
+            if (Api)
+                yield return Api.NextQuestion(new InterviewNextRequest
+                {
+                    config = Config,
+                    history = Array.Empty<QAExchange>(),
+                    asked_count = 0,
+                    max_questions = MaxQuestions,
+                }, value => next = value, value => error = value);
+            if (next == null || next.done || string.IsNullOrWhiteSpace(next.question))
             {
-                question = FirstQuestion,
-                kind = "base",
-                question_speaker = "warm",
-            });
+                if (!string.IsNullOrWhiteSpace(error)) Debug.LogWarning("[interview] first question failed: " + error);
+                next = new InterviewNextResponse
+                {
+                    question = $"{Config.job_role} 직무에 지원하신 동기와 {Config.topic}에 관해 말씀해 주시겠습니까?",
+                    kind = "base",
+                    question_speaker = "warm",
+                };
+            }
+            yield return Ask(next);
         }
 
         private IEnumerator Ask(InterviewNextResponse next)
@@ -146,11 +176,43 @@ namespace SpeakUpXR
             _current.filler_count = analysis?.FillerCount() ?? 0;
             _current.gaze_ratio = Signals ? Signals.CurrentGazeRatio : -1f;
             _current.gaze_switches = Signals ? Signals.CurrentSwitches : 0;
+            _current.posture_sway = Signals ? Signals.CurrentPostureSway : -1f;
+            _current.head_motion = Signals ? Signals.CurrentHeadMotion : -1f;
+            _current.hand_motion = Signals ? Signals.CurrentHandMotion : -1f;
+            _current.hand_span = Signals ? Signals.CurrentHandSpan : -1f;
+            _current.gesture_idle_seconds = Signals ? Signals.CurrentGestureIdleSeconds : -1f;
+            if (string.IsNullOrWhiteSpace(_current.answer))
+            {
+                Hud?.SetInterim("음성을 인식하지 못했습니다");
+                if (!string.IsNullOrEmpty(error)) Debug.LogWarning("[interview] " + error);
+                yield return RetryUnheardAnswer();
+                yield break;
+            }
             _history.Add(_current);
-            Hud?.SetInterim(string.IsNullOrWhiteSpace(_current.answer) ? "음성을 인식하지 못했습니다" : _current.answer);
+            Hud?.SetInterim(_current.answer);
             if (!string.IsNullOrEmpty(error)) Debug.LogWarning("[interview] " + error);
             _answerBusy = false;
+            var liveFeedback = GetComponent<XrRealtimeFeedbackController>();
+            if (liveFeedback) yield return liveFeedback.DeliverAnswerMetrics(analysis);
             yield return ThinkAndContinue();
+        }
+
+        private IEnumerator RetryUnheardAnswer()
+        {
+            const string line = "답변이 들리지 않았습니다. 짧게라도 말씀해 주시겠습니까?";
+            SetState(SessionState.Asking);
+            var speaker = Panel ? Panel.Find("analytical", "followup") : null;
+            Hud?.SetSpeaker(speaker ? speaker.DisplayName : "기술 면접관");
+            Hud?.SetQuestion(line);
+            Hud?.SetStatus("답변을 다시 기다립니다", HudTone.Ask);
+            yield return Speak(line, "analytical", "followup", "neutral");
+            SetState(SessionState.Listening);
+            Hud?.SetQuestion(_current.question);
+            Hud?.SetStatus("답변 중 · 끝나면 트리거를 눌러 주세요", HudTone.Listen);
+            Hud?.SetInterim("음성을 기록하고 있습니다");
+            Signals?.BeginAnswer();
+            Microphone?.Begin();
+            _answerBusy = false;
         }
 
         private IEnumerator ThinkAndContinue()

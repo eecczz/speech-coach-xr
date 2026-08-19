@@ -24,11 +24,12 @@ namespace SpeakUpXR
 
         public void ShowReport(InterviewReportResponse report, QAExchange[] history)
         {
+            if (report == null) report = BuildLocalReport(history);
             if (Root) Root.SetActive(true);
             if (LoadingRoot) LoadingRoot.SetActive(false);
             if (ReportRoot) ReportRoot.SetActive(true);
             if (TitleText) TitleText.text = "면접 코칭 리포트";
-            if (SummaryText) SummaryText.text = report?.overall_summary ?? "리포트를 불러오지 못했습니다. 답변 기록은 보존되었습니다.";
+            if (SummaryText) SummaryText.text = report.overall_summary;
 
             var detail = new StringBuilder();
             if (report?.strengths != null && report.strengths.Length > 0)
@@ -52,6 +53,26 @@ namespace SpeakUpXR
                 detail.Append($"필러  {fillers}회   ·   시선 전환  {switches}회");
             }
             if (DetailText) DetailText.text = detail.ToString();
+        }
+
+        private static InterviewReportResponse BuildLocalReport(QAExchange[] history)
+        {
+            int answered = 0;
+            if (history != null)
+                foreach (var qa in history)
+                    if (qa != null && !string.IsNullOrWhiteSpace(qa.answer)) answered++;
+
+            return new InterviewReportResponse
+            {
+                overall_summary = answered == 0
+                    ? "이번 연습에서는 평가할 수 있는 음성 답변이 기록되지 않았습니다. 면접 진행 기록은 정상 보존되었습니다. 다음 연습에서는 질문마다 짧게라도 실제 답변을 남겨 주세요."
+                    : "AI 리포트 연결이 지연되어 기록된 답변과 XR 관찰값으로 기본 리포트를 표시합니다.",
+                strengths = new string[0],
+                improvements = answered == 0
+                    ? new[] { "질문마다 결론부터 한두 문장으로 답변 시작", "질문당 최소 30초 이상 구체적인 사례 설명" }
+                    : new[] { "결론을 먼저 말하고 구체적인 근거와 본인의 행동을 연결" },
+                per_question = new PerQuestionEval[0]
+            };
         }
     }
 }

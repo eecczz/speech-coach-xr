@@ -11,12 +11,14 @@ namespace SpeakUpXR
     public class InterviewEntranceSequence : MonoBehaviour
     {
         public Transform XrOrigin;
+        [Tooltip("Scene-authored player avatar. Its walk animation and actual movement begin together.")]
+        public FirstPersonAvatarController PlayerAvatar;
         public Transform Door;
         public Transform EntrancePoint;
         public Transform SeatPoint;
         [Range(0.2f, 3f)] public float DoorOpenSeconds = 0.8f;
         [Range(1f, 10f)] public float WalkSeconds = 4f;
-        [Range(0f, 2f)] public float GreetingPauseSeconds = 0.8f;
+        [Range(0f, 2f)] public float GreetingPauseSeconds;
         public Vector3 DoorOpenEuler = new(0f, -95f, 0f);
         public bool PlayOnStart = true;
 
@@ -37,13 +39,18 @@ namespace SpeakUpXR
 
         private IEnumerator Run()
         {
-            if (!XrOrigin || !EntrancePoint || !SeatPoint) { Finished?.Invoke(); yield break; }
-            XrOrigin.SetPositionAndRotation(EntrancePoint.position, EntrancePoint.rotation);
-            if (Door)
+            if ((!XrOrigin && !PlayerAvatar) || !EntrancePoint || !SeatPoint) { Finished?.Invoke(); yield break; }
+            if (!PlayerAvatar) XrOrigin.SetPositionAndRotation(EntrancePoint.position, EntrancePoint.rotation);
+            // Door and candidate start together. Waiting for the entire door animation
+            // used to leave the candidate standing still before the walk began.
+            if (Door) StartCoroutine(RotateDoor(_doorClosed, _doorClosed * Quaternion.Euler(DoorOpenEuler), DoorOpenSeconds));
+            if (PlayerAvatar)
             {
-                var open = _doorClosed * Quaternion.Euler(DoorOpenEuler);
-                yield return RotateDoor(_doorClosed, open, DoorOpenSeconds);
+                yield return PlayerAvatar.EnterAndSit(EntrancePoint, SeatPoint);
+                Finished?.Invoke();
+                yield break;
             }
+
             Vector3 from = EntrancePoint.position;
             Quaternion fromRot = EntrancePoint.rotation;
             float elapsed = 0f;

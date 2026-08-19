@@ -3,6 +3,7 @@
 //               + Quest-appropriate player settings (IL2CPP, ARM64, Vulkan, ASTC).
 //   BuildApk  : builds the Interview scene into Builds/SpeakUpXR.apk.
 
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
@@ -16,10 +17,27 @@ using UnityEngine.XR.OpenXR;
 
 public static class XrSetup
 {
+    private const string ConfigurationMarker = "Assets/XR/openxr-quest-pc-configured-v1.txt";
+
+    [InitializeOnLoadMethod]
+    private static void AutoConfigureOnce()
+    {
+        if (!File.Exists(ConfigurationMarker)) EditorApplication.delayCall += ConfigureAndMark;
+    }
+
+    private static void ConfigureAndMark()
+    {
+        if (File.Exists(ConfigurationMarker) || EditorApplication.isCompiling ||
+            EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return;
+        Configure();
+        File.WriteAllText(ConfigurationMarker,
+            "OpenXR loader: Android Quest + Standalone PC VR. Oculus/Meta controller profiles enabled.\n");
+        AssetDatabase.ImportAsset(ConfigurationMarker);
+    }
+
+    [MenuItem("SpeakUpXR/Configure OpenXR For Quest And PC VR")]
     public static void Configure()
     {
-        var group = BuildTargetGroup.Android;
-
         // ── XR General Settings asset (create when missing, as the UI would) ──
         XRGeneralSettingsPerBuildTarget perTarget = null;
         EditorBuildSettings.TryGetConfigObject(XRGeneralSettings.k_SettingsKey, out perTarget);
@@ -32,48 +50,8 @@ public static class XrSetup
             EditorBuildSettings.AddConfigObject(XRGeneralSettings.k_SettingsKey, perTarget, true);
         }
 
-        var settings = perTarget.SettingsForBuildTarget(group);
-        if (settings == null)
-        {
-            settings = ScriptableObject.CreateInstance<XRGeneralSettings>();
-            settings.name = "Android Settings";
-            var manager = ScriptableObject.CreateInstance<XRManagerSettings>();
-            manager.name = "Android Providers";
-            settings.Manager = manager;
-            perTarget.SetSettingsForBuildTarget(group, settings);
-            AssetDatabase.AddObjectToAsset(settings, perTarget);
-            AssetDatabase.AddObjectToAsset(manager, perTarget);
-        }
-        settings.InitManagerOnStart = true;
-
-        if (!XRPackageMetadataStore.AssignLoader(settings.Manager, typeof(OpenXRLoader).FullName, group))
-        {
-            Debug.LogError("[XrSetup] OpenXR loader assign FAILED");
-            EditorApplication.Exit(1);
-            return;
-        }
-        Debug.Log("[XrSetup] OpenXR loader assigned for Android");
-
-        // ── OpenXR features: Meta Quest Support + Oculus Touch controller profile ──
-        FeatureHelpers.RefreshFeatures(group);
-        var openxr = OpenXRSettings.GetSettingsForBuildTargetGroup(group);
-        int enabled = 0;
-        foreach (var f in openxr.GetFeatures())
-        {
-            var t = f.GetType().Name;
-            if (t == "MetaQuestFeature" || t == "OculusTouchControllerProfile")
-            {
-                f.enabled = true;
-                enabled++;
-                Debug.Log($"[XrSetup] feature enabled: {t}");
-            }
-        }
-        if (enabled < 2)
-        {
-            Debug.LogError($"[XrSetup] expected 2 features, enabled {enabled}");
-            EditorApplication.Exit(1);
-            return;
-        }
+        ConfigureOpenXrTarget(perTarget, BuildTargetGroup.Android, true);
+        ConfigureOpenXrTarget(perTarget, BuildTargetGroup.Standalone, false);
 
         // ── Player settings for Quest 3 ──
         var nbt = NamedBuildTarget.Android;
@@ -91,7 +69,61 @@ public static class XrSetup
         PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
 
         AssetDatabase.SaveAssets();
-        Debug.Log("[XrSetup] Configure done");
+        Debug.Log("[XrSetup] Configure done: OpenXR enabled for Quest Android and PC VR Standalone");
+    }
+
+    private static void ConfigureOpenXrTarget(
+        XRGeneralSettingsPerBuildTarget perTarget, BuildTargetGroup group, bool questAndroid)
+    {
+        var settings = perTarget.SettingsForBuildTarget(group);
+        if (settings == null)
+        {
+            settings = ScriptableObject.CreateInstance<XRGeneralSettings>();
+            settings.name = group + " Settings";
+            var manager = ScriptableObject.CreateInstance<XRManagerSettings>();
+            manager.name = group + " Providers";
+            settings.Manager = manager;
+            perTarget.SetSettingsForBuildTarget(group, settings);
+            AssetDatabase.AddObjectToAsset(settings, perTarget);
+            AssetDatabase.AddObjectToAsset(manager, perTarget);
+        }
+        // Quest always initializes OpenXR. PC VR is initialized conditionally at
+        // runtime only when Windows has an active OpenXR runtime registered, so
+        // ordinary desktop preview stays clean instead of logging XR_ERROR_RUNTIME_UNAVAILABLE.
+        settings.InitManagerOnStart = questAndroid;
+        EditorUtility.SetDirty(settings);
+
+        if (!XRPackageMetadataStore.AssignLoader(settings.Manager, typeof(OpenXRLoader).FullName, group))
+        {
+            throw new System.InvalidOperationException($"OpenXR loader assign failed for {group}");
+        }
+        Debug.Log($"[XrSetup] OpenXR loader assigned for {group}");
+
+        // ── OpenXR features: Meta Quest Support + Oculus Touch controller profile ──
+        FeatureHelpers.RefreshFeatures(group);
+        var openxr = OpenXRSettings.GetSettingsForBuildTargetGroup(group);
+        int enabled = 0;
+        foreach (var f in openxr.GetFeatures())
+        {
+            var t = f.GetType().Name;
+            bool required = t == "OculusTouchControllerProfile" ||
+                            (questAndroid && t == "MetaQuestFeature") ||
+                            (!questAndroid && t == "MetaQuestTouchPlusControllerProfile");
+            if (required)
+            {
+                f.enabled = true;
+                enabled++;
+                Debug.Log($"[XrSetup] feature enabled: {t}");
+            }
+        }
+        int requiredCount = questAndroid ? 2 : 1;
+        if (enabled < requiredCount)
+        {
+            throw new System.InvalidOperationException(
+                $"Expected {requiredCount} OpenXR features for {group}, enabled {enabled}");
+        }
+        EditorUtility.SetDirty(settings.Manager);
+        EditorUtility.SetDirty(perTarget);
     }
 
     public static void BuildApk()

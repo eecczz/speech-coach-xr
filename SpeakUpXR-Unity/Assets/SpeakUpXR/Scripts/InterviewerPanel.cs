@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace SpeakUpXR
@@ -8,6 +9,19 @@ namespace SpeakUpXR
         [Tooltip("Exactly three scene-placed characters: warm, analytical, challenging")]
         public InterviewerController[] Members = new InterviewerController[3];
         public InterviewerController ActiveSpeaker { get; private set; }
+
+        private void Awake()
+        {
+            var animators = new HashSet<Animator>();
+            foreach (var member in Members)
+            {
+                if (!member) continue;
+                if (!member.CharacterAnimator && member.AvatarRoot)
+                    member.CharacterAnimator = member.AvatarRoot.GetComponentInChildren<Animator>(true);
+                if (member.CharacterAnimator && !animators.Add(member.CharacterAnimator))
+                    Debug.LogError("[interview panel] Two interviewers reference the same Animator. Each seat must own an independent Animator.", member);
+            }
+        }
 
         public InterviewerController Find(string personaId, string kind = null)
         {
@@ -27,6 +41,10 @@ namespace SpeakUpXR
         public IEnumerator SpeakLine(CoachApi api, string line, string speakerId, string kind, string tone = "neutral")
         {
             ActiveSpeaker = Find(speakerId, kind);
+            // Explicit turn ownership: no previous/other Animator or AudioSource may
+            // remain in a speaking state while this panel member has the floor.
+            foreach (var member in Members)
+                if (member && member != ActiveSpeaker) member.StopSpeaking();
             if (ActiveSpeaker) yield return ActiveSpeaker.Speak(api, line, tone);
             else
             {

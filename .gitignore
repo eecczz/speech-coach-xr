@@ -45,8 +45,12 @@ SpeakUpXR-Unity/Assets/ThirdParty/
 SpeakUpXR-Unity/Assets/ThirdParty.meta
 SpeakUpXR-Unity/Assets/FORMAL_AVATAR/
 SpeakUpXR-Unity/Assets/FORMAL_AVATAR.meta
-SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/
-SpeakUpXR-Unity/Assets/SpeakUpXR/Animations.meta
+# Keep project-authored Animator controllers, clips, masks, and marker files.
+# External Mixamo/model animation binaries remain local-only.
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.fbx
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.FBX
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.fbx.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.FBX.meta
 
 # IDE / OS
 .vscode/

@@ -26,6 +26,9 @@ TriggerKind = Literal[
     "filler",
     "speech_rate",
     "content",
+    "posture",
+    "gesture",
+    "vocal_tone",
 ]
 
 
@@ -127,6 +130,14 @@ def _trigger_brief(req: AgentTriggerRequest) -> str:
         return f"최근 1분 기준 말 속도가 약 {wpm:.0f} WPM입니다."
     if req.kind == "content":
         return f'사용자가 방금 다음과 같이 말했습니다: "{req.recent_transcript.strip()}"'
+    if req.kind == "posture":
+        return "헤드셋 움직임 기준으로 고개와 상체가 과도하게 흔들리고 있습니다."
+    if req.kind == "gesture":
+        return "XR 컨트롤러 기준으로 손동작이 과도하게 빠릅니다."
+    if req.kind == "vocal_tone":
+        variation = float(p.get("pitch_sd_semitones", -1))
+        ending = float(p.get("end_energy_drop", -1))
+        return f"음높이 변화 {variation:.2f}, 문장 끝 에너지 비율 {ending:.2f}로 목소리 톤이 단조롭거나 말끝이 흐립니다."
     return f"트리거: {req.kind}"
 
 
@@ -154,6 +165,12 @@ def _trigger_directive(kind: TriggerKind) -> str:
             "- 평이한 발화면 굳이 끼어들지 말고 message를 null로. 매번 반응하면 짜증나.\n"
             "- 사용자가 직접 입력한 질문(manual:true)이면 그 질문에 답해줘."
         )
+    if kind == "posture":
+        return "면접 자세가 불안정해 보여. 고개와 상체를 안정시키도록 짧게 말해줘."
+    if kind == "gesture":
+        return "손동작이 산만해 보여. 제스처를 차분하게 하도록 짧게 말해줘."
+    if kind == "vocal_tone":
+        return "목소리가 단조롭거나 말끝이 흐려. 핵심어에 억양을 주고 문장 끝을 분명히 하도록 짧게 말해줘."
     return "상황에 맞게 한 줄로 반응."
 
 
@@ -168,6 +185,15 @@ def _system_prompt(req: AgentTriggerRequest) -> str:
         if req.focus_goals
         else "특별히 명시된 포커스는 없음."
     )
+    if req.scenario == "interview":
+        return (
+            "당신은 실제 채용 면접 중 지원자의 답변을 듣는 세 명의 면접관 중 한 명입니다. "
+            "측정된 시선·침묵·자세·제스처·말속도 신호를 종합해 필요한 순간에만 짧게 개입하세요.\n"
+            f"{situation_line}\n{focus_line}\n"
+            "한국어 존댓말 한 문장, 35자 이내. 관찰 근거 없이 칭찬하지 말고, 무응답에 '잘 들었습니다'라고 하지 마세요. "
+            "평이하거나 확신이 낮으면 message를 null로 반환하세요. recent_agent_messages와 같은 표현을 반복하지 마세요.\n"
+            f"{_FEEDBACK_SCHEMA_HINT}"
+        )
     return (
         "당신은 사용자가 발표 연습할 때 **옆에서 같이 듣고 있는 친구**입니다. "
         "선생님이 아니에요. 평가하거나 채점하는 사람이 아닙니다. "
@@ -319,11 +345,51 @@ def _generate_with_jeonbuk(req: AgentTriggerRequest) -> AgentFeedbackResponse:
     return AgentFeedbackResponse.model_validate_json(raw)
 
 
+def _generate_with_nvidia(req: AgentTriggerRequest) -> AgentFeedbackResponse:
+    from .llm import _nvidia_chat
+
+    if not os.environ.get("NVIDIA_API_KEY"):
+        raise RuntimeError("NVIDIA_API_KEY not set")
+    json_contract = (
+        '\n\n반드시 다음 JSON 형식으로만 응답하세요. Markdown 금지:\n'
+        '{"message": "한 줄 코칭 한국어 텍스트 또는 null", '
+        '"tone": "praise" | "nudge" | "critique" | null}'
+    )
+    response = _nvidia_chat(
+        [
+            {"role": "system", "content": _system_prompt(req)},
+            {"role": "user", "content": _user_prompt(req) + json_contract},
+        ],
+        temperature=0.7,
+        max_tokens=240,
+    )
+    raw = (response.choices[0].message.content or "").strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1].removeprefix("json").strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    return AgentFeedbackResponse.model_validate_json(raw[start : end + 1] if start >= 0 and end > start else raw)
+
+
 def generate_agent_feedback(req: AgentTriggerRequest) -> AgentFeedbackResponse:
     """Provider-routed agent feedback. Caller wraps in try/except."""
     provider = os.environ.get("LLM_PROVIDER", "gemini").lower().strip()
+    if provider == "mock":
+        messages = {
+            "silence": ("잠시 생각을 정리한 뒤 이어서 말씀해 주세요.", "nudge"),
+            "gaze": ("질문자를 보면서 답변해 주세요.", "critique"),
+            "posture": ("고개와 상체를 조금 더 안정시켜 주세요.", "nudge"),
+            "gesture": ("손동작을 조금만 차분하게 해 주세요.", "nudge"),
+            "motion_absence": ("필요한 부분에서는 자연스러운 손짓을 곁들여 주세요.", "nudge"),
+            "speech_rate": ("조금 더 천천히 핵심부터 말씀해 주세요.", "critique"),
+            "filler": ("짧게 호흡하고 문장을 이어가 주세요.", "nudge"),
+            "vocal_tone": ("핵심어에 억양을 주고 말끝을 분명히 해 주세요.", "nudge"),
+        }
+        message, tone = messages.get(req.kind, (None, None))
+        return AgentFeedbackResponse(message=message, tone=tone)
     if provider == "jeonbuk":
         result = _generate_with_jeonbuk(req)
+    elif provider in ("nvidia", "qwen"):
+        result = _generate_with_nvidia(req)
     else:
         result = _generate_with_gemini(req)
     # Trim — models occasionally return "  하세요. " with trailing whitespace.
