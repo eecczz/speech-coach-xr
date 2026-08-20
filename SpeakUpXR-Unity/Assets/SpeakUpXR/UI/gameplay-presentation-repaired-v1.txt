@@ -1,0 +1,2 @@
+Gameplay HUD repaired: only DialogueBox_BOTTOM_ONLY has a background.
+Status is plain text. First-person camera is positioned in front of the face mesh.

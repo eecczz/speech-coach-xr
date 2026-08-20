@@ -11,9 +11,14 @@ namespace SpeakUpXR
         [Range(8000, 48000)] public int SampleRate = 16000;
         [Range(15, 300)] public int MaxAnswerSeconds = 180;
         public bool IsRecording { get; private set; }
+        public float CurrentRms { get; private set; }
+        public float CurrentSilenceSeconds { get; private set; }
+        [Range(0.001f, 0.08f)] public float SilenceThreshold = 0.012f;
 
         private AudioClip _clip;
         private string _device;
+        private float _nextLevelSample;
+        private int _lastMicPosition;
 
         private void Start()
         {
@@ -41,7 +46,27 @@ namespace SpeakUpXR
             _device = Array.Exists(Microphone.devices, d => d == PreferredDevice) ? PreferredDevice : Microphone.devices[0];
             _clip = Microphone.Start(_device, false, MaxAnswerSeconds, SampleRate);
             IsRecording = _clip;
+            CurrentRms = CurrentSilenceSeconds = 0f;
+            _lastMicPosition = 0;
+            _nextLevelSample = Time.unscaledTime;
             return IsRecording;
+        }
+
+        private void Update()
+        {
+            if (!IsRecording || !_clip || Time.unscaledTime < _nextLevelSample) return;
+            float interval = 0.1f;
+            _nextLevelSample = Time.unscaledTime + interval;
+            int position = Microphone.GetPosition(_device);
+            int frames = Mathf.Clamp(position - _lastMicPosition, 0, Mathf.Min(2048, position));
+            if (frames <= 0) return;
+            var samples = new float[frames * _clip.channels];
+            _clip.GetData(samples, position - frames);
+            float sum = 0f;
+            foreach (float sample in samples) sum += sample * sample;
+            CurrentRms = Mathf.Sqrt(sum / Mathf.Max(1, samples.Length));
+            CurrentSilenceSeconds = CurrentRms < SilenceThreshold ? CurrentSilenceSeconds + interval : 0f;
+            _lastMicPosition = position;
         }
 
         public byte[] End()
@@ -50,6 +75,7 @@ namespace SpeakUpXR
             int frames = Mathf.Max(0, Microphone.GetPosition(_device));
             Microphone.End(_device);
             IsRecording = false;
+            CurrentRms = CurrentSilenceSeconds = 0f;
             if (frames <= SampleRate / 4) return null;
 
             int channels = _clip.channels;

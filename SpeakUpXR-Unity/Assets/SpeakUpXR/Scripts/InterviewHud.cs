@@ -16,10 +16,10 @@ namespace SpeakUpXR
         public Text SpeakerText;
         public Image StatusPill;
 
-        private static readonly Color AskColor = new(0.43f, 0.66f, 1f);
-        private static readonly Color ListenColor = new(0.29f, 0.87f, 0.50f);
-        private static readonly Color ThinkColor = new(0.98f, 0.75f, 0.14f);
-        private static readonly Color DoneColor = new(0.80f, 0.84f, 0.88f);
+        private static readonly Color AskColor = new(0.18f, 0.17f, 0.23f);
+        private static readonly Color ListenColor = new(0.02f, 0.59f, 0.41f);
+        private static readonly Color ThinkColor = new(0.73f, 0.45f, 0.08f);
+        private static readonly Color DoneColor = new(0.42f, 0.41f, 0.50f);
 
         public void SetQuestion(string text)
         {
@@ -35,14 +35,17 @@ namespace SpeakUpXR
         public void SetStatus(string text, HudTone tone)
         {
             if (StatusText) StatusText.text = text;
+            Color toneColor = tone switch
+            {
+                HudTone.Listen => ListenColor,
+                HudTone.Think => ThinkColor,
+                HudTone.Done => DoneColor,
+                _ => AskColor,
+            };
             if (StatusPill)
-                StatusPill.color = tone switch
-                {
-                    HudTone.Listen => ListenColor,
-                    HudTone.Think => ThinkColor,
-                    HudTone.Done => DoneColor,
-                    _ => AskColor,
-                };
+                StatusPill.color = toneColor;
+            else if (StatusText)
+                StatusText.color = toneColor;
         }
 
         public void SetInterim(string text)

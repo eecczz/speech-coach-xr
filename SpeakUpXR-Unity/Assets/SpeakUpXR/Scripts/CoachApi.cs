@@ -16,14 +16,22 @@ namespace SpeakUpXR
         public int filler_count;
         public float gaze_ratio = -1f;
         public int gaze_switches;
+        public float posture_sway = -1f;
+        public float head_motion = -1f;
+        public float hand_motion = -1f;
+        public float hand_span = -1f;
+        public float gesture_idle_seconds = -1f;
     }
 
     [Serializable]
     public class InterviewConfig
     {
+        public string project_name = "면접 준비";
         public string job_role = "신입 공통 인성";
         public string situation = "실무 및 인성 종합 면접";
+        public string topic = "지원 동기와 직무 경험";
         public string difficulty = "보통";
+        public string[] focus_goals = Array.Empty<string>();
     }
 
     [Serializable]
@@ -74,6 +82,11 @@ namespace SpeakUpXR
         public int word_count;
         public int filler_count;
         public string[] filler_terms;
+        public float rms_mean;
+        public float pitch_sd_semitones;
+        public float pitch_range_semitones;
+        public float intensity_cv;
+        public float end_energy_drop;
     }
     [Serializable]
     public class AudioAnalysisResponse
@@ -99,6 +112,22 @@ namespace SpeakUpXR
             foreach (var frame in prosody_frames ?? Array.Empty<ProsodyFrame>()) count += frame.filler_count;
             return count;
         }
+
+        public float AveragePitchVariation()
+        {
+            float sum = 0f; int count = 0;
+            foreach (var frame in prosody_frames ?? Array.Empty<ProsodyFrame>())
+                if (frame.pitch_sd_semitones > 0f) { sum += frame.pitch_sd_semitones; count++; }
+            return count > 0 ? sum / count : -1f;
+        }
+
+        public float AverageEndEnergy()
+        {
+            float sum = 0f; int count = 0;
+            foreach (var frame in prosody_frames ?? Array.Empty<ProsodyFrame>())
+                if (frame.end_energy_drop > 0f) { sum += frame.end_energy_drop; count++; }
+            return count > 0 ? sum / count : -1f;
+        }
     }
 
     [Serializable]
@@ -110,6 +139,34 @@ namespace SpeakUpXR
         public int pitch_percent;
         public string tone;
     }
+
+    [Serializable] public class AgentFeedbackPayload { public float silence_seconds; public float gaze_off_seconds; public float posture_sway; public float hand_velocity; public float hand_span; public float gesture_idle_seconds; public float wpm; public int filler_count; public float pitch_sd_semitones; public float end_energy_drop; }
+    [Serializable]
+    public class AgentMultimodalContext
+    {
+        public string recent_transcript = "";
+        public float gaze_fixation_ratio_avg = -1f;
+        public float hand_velocity_max_avg = -1f;
+        public float posture_sway_avg = -1f;
+        public float current_silence_seconds = -1f;
+        public float wpm = -1f;
+        public int filler_count_total;
+        public float session_elapsed_s;
+        public string[] recent_agent_messages = Array.Empty<string>();
+    }
+    [Serializable]
+    public class AgentFeedbackRequest
+    {
+        public string kind;
+        public string scenario = "interview";
+        public string situation = "";
+        public string[] focus_goals = Array.Empty<string>();
+        public AgentFeedbackPayload payload = new();
+        public AgentMultimodalContext context = new();
+        public string recent_transcript = "";
+    }
+    [Serializable] public class AgentFeedbackResponse { public string message; public string tone; }
+    [Serializable] public class CoachHealthResponse { public bool ok; public string provider; public string model; public string base_url; }
 
     public class CoachApi : MonoBehaviour
     {
@@ -124,6 +181,18 @@ namespace SpeakUpXR
 
         public IEnumerator Report(InterviewReportRequest req, Action<InterviewReportResponse> ok, Action<string> error) =>
             PostJson("/interview/report", JsonUtility.ToJson(req), json => ok?.Invoke(JsonUtility.FromJson<InterviewReportResponse>(json)), error);
+
+        public IEnumerator AgentFeedback(AgentFeedbackRequest req, Action<AgentFeedbackResponse> ok, Action<string> error) =>
+            PostJson("/agent-feedback", JsonUtility.ToJson(req), json => ok?.Invoke(JsonUtility.FromJson<AgentFeedbackResponse>(json)), error);
+
+        public IEnumerator Health(Action<CoachHealthResponse> ok, Action<string> error)
+        {
+            using var request = UnityWebRequest.Get(BaseUrl.TrimEnd('/') + "/healthz");
+            request.timeout = 5;
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success) error?.Invoke(request.error);
+            else ok?.Invoke(JsonUtility.FromJson<CoachHealthResponse>(request.downloadHandler.text));
+        }
 
         public IEnumerator Synthesize(string text, InterviewerVoice voice, string tone, Action<AudioClip> ok, Action<string> error)
         {

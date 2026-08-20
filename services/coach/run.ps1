@@ -1,12 +1,28 @@
 # Windows용 로컬 면접 coach/TTS 서버 실행기.
 param(
-    [string]$Provider = "mock",
+    [string]$Provider = "auto",
     [int]$Port = 8002
 )
 
 $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
 $venv = Join-Path $PSScriptRoot ".venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
+
+# Load repository-local .env without printing secrets. Existing process-level
+# environment variables take precedence.
+$envFile = Join-Path $repo ".env"
+if (Test-Path -LiteralPath $envFile) {
+    Get-Content -LiteralPath $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) { return }
+        $parts = $line.Split("=", 2)
+        $name = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        if ($name -and -not [Environment]::GetEnvironmentVariable($name)) {
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+}
 
 function Find-Python {
     $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
@@ -37,6 +53,19 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     if ($LASTEXITCODE -ne 0) { throw "서버 패키지 설치 실패" }
 }
 
+if ($Provider -eq "auto") {
+    $configuredProvider = [string]$env:LLM_PROVIDER
+    $configuredProvider = $configuredProvider.Trim().ToLowerInvariant()
+    if ($configuredProvider -eq "gemini" -and $env:GOOGLE_API_KEY) { $Provider = "gemini" }
+    elseif ($configuredProvider -eq "nvidia" -and $env:NVIDIA_API_KEY) { $Provider = "nvidia" }
+    elseif ($configuredProvider -eq "jeonbuk" -and $env:JEONBUK_API_KEY) { $Provider = "jeonbuk" }
+    elseif ($configuredProvider -eq "claude" -and $env:ANTHROPIC_API_KEY) { $Provider = "claude" }
+    elseif ($configuredProvider -eq "mock") { $Provider = "mock" }
+    elseif (-not $configuredProvider -and $env:GOOGLE_API_KEY) { $Provider = "gemini" }
+    elseif (-not $configuredProvider -and $env:NVIDIA_API_KEY) { $Provider = "nvidia" }
+    elseif (-not $configuredProvider -and $env:JEONBUK_API_KEY) { $Provider = "jeonbuk" }
+    else { $Provider = "mock" }
+}
 $env:LLM_PROVIDER = $Provider
 $env:PYTHONPATH = $repo
 Write-Host "[SpeakUpXR] coach/TTS 서버 실행: http://127.0.0.1:$Port (LLM_PROVIDER=$Provider)"

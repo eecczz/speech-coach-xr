@@ -16,10 +16,29 @@ namespace SpeakUpXR
         public Vector2 DesktopPivot = new(0.5f, 1f);
         public Vector2 DesktopPosition = new(0f, -24f);
         public Vector2 DesktopSize = new(1100f, 300f);
+        [Header("XR head-locked layout")]
+        public bool AttachToHeadInXr;
+        public Vector3 XrLocalPosition = new(0f, -0.30f, 0.78f);
+        public Vector3 XrLocalEuler;
+        public float XrWorldScale = 0.00072f;
 
         private void Awake()
         {
-            if (!OverlayWithoutXr || XRSettings.isDeviceActive)
+            if (XRSettings.isDeviceActive)
+            {
+                if (!AttachToHeadInXr) return;
+                var head = Camera.main;
+                if (!head) return;
+                var xrCanvas = GetComponent<Canvas>();
+                xrCanvas.renderMode = RenderMode.WorldSpace;
+                transform.SetParent(head.transform, false);
+                transform.localPosition = XrLocalPosition;
+                transform.localRotation = Quaternion.Euler(XrLocalEuler);
+                transform.localScale = Vector3.one * XrWorldScale;
+                return;
+            }
+
+            if (!OverlayWithoutXr)
                 return;
 
             var canvas = GetComponent<Canvas>();
