@@ -1,0 +1,4 @@
+New office building retained; generated InterviewRoom_EDIT_ME removed.
+Generated desk and chair primitives removed; the office-building furniture remains.
+Interview systems are grouped under InterviewSetup_NEW_OFFICE_EDIT_HERE.
+Entrance door is intentionally unassigned until a specific building door pivot is selected.

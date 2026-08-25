@@ -87,6 +87,17 @@ public static class MixamoInterviewAnimatorInstaller
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                interviewer.CharacterAnimator = animator;
+                interviewer.UseFullBodySpeakingGesture = false;
+                interviewer.SpeakingGesture.Clip = interviewer.Personality == InterviewerPersonality.Challenging
+                    ? angry
+                    : interviewer.Personality == InterviewerPersonality.Analytical ? asking : talking;
+                interviewer.SpeakingGesture.StateName = interviewer.Personality == InterviewerPersonality.Challenging
+                    ? "Challenging - Angry Gesture"
+                    : interviewer.Personality == InterviewerPersonality.Analytical
+                        ? "Analytical - Asking Question"
+                        : "Warm - Sitting Talking";
+                interviewer.SpeakingGesture.SourceFrameRate = interviewer.SpeakingGesture.Clip.frameRate;
                 EditorUtility.SetDirty(animator);
                 EditorUtility.SetDirty(interviewer);
             }

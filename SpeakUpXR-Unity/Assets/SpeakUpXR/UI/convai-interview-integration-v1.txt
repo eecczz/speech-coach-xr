@@ -1,0 +1,10 @@
+SpeakUpXR Convai 3-person interview integration
+Generated: 2026-08-21 17:20:33
+ConvaiManager: INSTALLED
+ConvaiPlayer: INSTALLED
+SpeechRoute: ConvaiCharacter.SendNarrativeSpeech(string) — exact scripted speech
+Fallback: existing Coach TTS when Convai is unavailable/not ready
+VisualPolicy: scene-authored Formal Character business suits remain active
+[1] 인사 면접관: Kim Minseo / 00b8c5b0-9d36-11f1-9de0-42010a7be02f / Avatar=FormalCharacter_warm_EDIT_TRANSFORM_HERE / Animator=OWN / BlendShapes=0 / Bridge=READY
+[2] 기술 면접관: Lee Junho / 116d164a-9d36-11f1-9a53-42010a7be02f / Avatar=FormalCharacter_analytical_EDIT_TRANSFORM_HERE / Animator=OWN / BlendShapes=0 / Bridge=READY
+[3] 임원 면접관: Park Seongho / 1e9178a2-9d36-11f1-907a-42010a7be02f / Avatar=FormalCharacter_challenging_EDIT_TRANSFORM_HERE / Animator=OWN / BlendShapes=0 / Bridge=READY

@@ -1,0 +1,10 @@
+SpeakUpXR URP migration
+Generated: 2026-08-21 17:39:48
+Package: com.unity.render-pipelines.universal 17.0.4
+PipelineAsset: Assets/SpeakUpXR/Rendering/SpeakUpXR_URP.asset
+RendererAsset: Assets/SpeakUpXR/Rendering/SpeakUpXR_URP_Renderer.asset
+XR profile: 4x MSAA, HDR off, depth texture on, opaque texture off, SRP Batcher on
+ConvertedMaterials: 181
+ErrorShaderMaterialsInInterview: 0
+Preview: OK
+Scope: office environment, Formal Character interviewers, SpeakUpXR generated materials

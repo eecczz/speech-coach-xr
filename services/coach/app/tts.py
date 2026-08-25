@@ -29,6 +29,8 @@ ALLOWED_VOICES = {
     "ko-KR-SoonBokNeural",
     "ko-KR-YuJinNeural",
     "ko-KR-HyunsuMultilingualNeural",
+    "en-US-AndrewMultilingualNeural",
+    "en-US-BrianMultilingualNeural",
 }
 
 EDGE_FALLBACK_VOICE = "ko-KR-HyunsuMultilingualNeural"

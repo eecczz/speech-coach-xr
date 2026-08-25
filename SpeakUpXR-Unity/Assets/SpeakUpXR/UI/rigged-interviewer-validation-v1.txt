@@ -1,0 +1,5 @@
+SpeakUpXR rigged interviewer validation
+Scene-authored characters: 3; runtime character spawning: disabled
+analytical: BusinessmanGreySuit_Technical_EDIT_TRANSFORM_HERE | Humanoid=true | SkinnedMeshes=1 | HeadTracker=true | Voice=ko-KR-InJoonNeural | Source=Assets/ThirdParty/Sketchfab/RiggedInterviewers/BusinessmanGreySuit_Rigged.fbx
+challenging: CorporateWalkGraySuit_Executive_EDIT_TRANSFORM_HERE | Humanoid=true | SkinnedMeshes=1 | HeadTracker=true | Voice=ko-KR-HyunsuMultilingualNeural | Source=Assets/ThirdParty/Sketchfab/RiggedInterviewers/CorporateWalkGraySuit_Rigged.fbx
+warm: BusinesswomanGreySuitTablet_HR_EDIT_TRANSFORM_HERE | Humanoid=true | SkinnedMeshes=1 | HeadTracker=true | Voice=ko-KR-SunHiNeural | Source=Assets/ThirdParty/Sketchfab/RiggedInterviewers/BusinesswomanGreySuitTablet_Rigged.fbx

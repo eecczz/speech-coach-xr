@@ -36,7 +36,7 @@ public static class LocalCoachEditorLauncher
         var start = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Provider mock -Port {CoachPort}",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Provider auto -Port {CoachPort}",
             WorkingDirectory = Path.GetDirectoryName(script),
             UseShellExecute = false,
             CreateNoWindow = true,

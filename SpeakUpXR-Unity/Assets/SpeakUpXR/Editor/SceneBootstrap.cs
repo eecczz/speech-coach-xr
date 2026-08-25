@@ -35,6 +35,7 @@ public static class SceneBootstrap
         var signals = system.AddComponent<CandidateSignalTracker>();
         signals.Head = head;
         signals.Panel = panel;
+        signals.Microphone = microphone;
         var session = system.AddComponent<InterviewSession>();
         session.Api = api;
         session.Panel = panel;
@@ -45,6 +46,14 @@ public static class SceneBootstrap
         session.ReportView = report;
         session.MaxQuestions = 5;
         session.AutoStart = true;
+        var casting = system.AddComponent<VoiceCastingController>();
+        casting.Panel = panel;
+        var liveFeedback = system.AddComponent<XrRealtimeFeedbackController>();
+        liveFeedback.Session = session;
+        liveFeedback.Signals = signals;
+        liveFeedback.Api = api;
+        liveFeedback.Panel = panel;
+        liveFeedback.Hud = hud;
         system.AddComponent<DevKeyboardDriver>().Session = session;
         system.AddComponent<XrAnswerInput>().Session = session;
 
@@ -101,6 +110,7 @@ public static class SceneBootstrap
         cameraObject.transform.localPosition = new Vector3(0, 1.65f, 0);
         var camera = cameraObject.AddComponent<Camera>();
         camera.nearClipPlane = 0.05f;
+        camera.fieldOfView = 72f;
         cameraObject.AddComponent<AudioListener>();
         cameraObject.AddComponent<TrackedPoseDriver>();
         cameraObject.AddComponent<DesktopLook>();
@@ -115,12 +125,12 @@ public static class SceneBootstrap
         Box(root.transform, "DeskFront", new Vector3(0, 0.38f, 1.68f), new Vector3(4.8f, 0.72f, 0.05f), Wood * 0.8f);
 
         string[] ids = { "warm", "analytical", "challenging" };
-        string[] names = { "따뜻한 인사 담당", "분석적인 실무 담당", "압박형 임원 담당" };
-        string[] voices = { "ko-KR-SunHiNeural", "ko-KR-HyunsuNeural", "ko-KR-InJoonNeural" };
+        string[] names = { "인사 면접관", "기술 면접관", "임원 면접관" };
+        string[] voices = { "ko-KR-InJoonNeural", "ko-KR-HyunsuMultilingualNeural", "en-US-AndrewMultilingualNeural" };
         int[] rates = { -4, 0, -6 };
         int[] pitches = { 2, 0, -4 };
         Color[] colors = { new(0.25f, 0.39f, 0.58f), new(0.20f, 0.32f, 0.28f), new(0.18f, 0.18f, 0.20f) };
-        float[] xs = { -1.45f, 0f, 1.45f };
+        float[] xs = { -1.25f, 0f, 1.25f };
         var members = new InterviewerController[3];
         for (int i = 0; i < 3; i++)
         {
@@ -183,32 +193,42 @@ public static class SceneBootstrap
     private static InterviewHud BuildHud()
     {
         var canvasObject = new GameObject("InterviewHud_EDIT_POSITION");
-        canvasObject.transform.position = new Vector3(0, 1.2f, 1.25f);
+        canvasObject.transform.position = new Vector3(0, 1.18f, 1.20f);
         var canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
-        canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1200, 320);
+        canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1200, 280);
         canvasObject.transform.localScale = Vector3.one * 0.001f;
         canvasObject.AddComponent<GraphicRaycaster>();
         var adaptive = canvasObject.AddComponent<AdaptiveWorldCanvas>();
-        adaptive.DesktopAnchor = new Vector2(0.5f, 1f);
-        adaptive.DesktopPivot = new Vector2(0.5f, 1f);
-        adaptive.DesktopPosition = new Vector2(0f, -24f);
-        adaptive.DesktopSize = new Vector2(1100f, 300f);
-        Fill(canvasObject.transform, "Background", new Color(0.04f, 0.06f, 0.09f, 0.88f));
+        adaptive.DesktopAnchor = new Vector2(0.5f, 0f);
+        adaptive.DesktopPivot = new Vector2(0.5f, 0f);
+        adaptive.DesktopPosition = new Vector2(0f, 32f);
+        adaptive.DesktopSize = new Vector2(1180f, 270f);
+        adaptive.AttachToHeadInXr = true;
+        adaptive.XrLocalPosition = new Vector3(0f, -0.31f, 0.78f);
+        adaptive.XrWorldScale = 0.00072f;
+        var dialogueBox = new GameObject("DialogueBox_BOTTOM_ONLY", typeof(RectTransform)).GetComponent<RectTransform>();
+        dialogueBox.SetParent(canvasObject.transform, false);
+        dialogueBox.anchorMin = dialogueBox.anchorMax = new Vector2(0.5f, 0f);
+        dialogueBox.pivot = new Vector2(0.5f, 0f);
+        dialogueBox.anchoredPosition = new Vector2(0f, 28f);
+        dialogueBox.sizeDelta = new Vector2(1160f, 230f);
+
+        var background = Fill(dialogueBox, "Background_DIALOGUE_ONLY", new Color(0.035f, 0.045f, 0.065f, 0.88f));
+        var outline = background.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color(0.58f, 0.66f, 0.76f, 0.75f);
+        outline.effectDistance = new Vector2(2f, -2f);
 
         var hud = canvasObject.AddComponent<InterviewHud>();
-        hud.SpeakerText = Text(canvasObject.transform, "Speaker", new Vector2(35, -28), 27, FontStyle.Bold, new Color(0.55f, 0.78f, 1f), 1130, 42);
-        hud.QuestionText = Text(canvasObject.transform, "Question", new Vector2(35, -82), 43, FontStyle.Bold, Color.white, 1130, 140);
-        hud.InterimText = Text(canvasObject.transform, "Interim", new Vector2(35, -240), 23, FontStyle.Normal, new Color(0.68f, 0.72f, 0.78f), 1130, 45);
-        var pill = new GameObject("StatusPill").AddComponent<Image>();
-        pill.transform.SetParent(canvasObject.transform, false);
-        pill.rectTransform.anchorMin = pill.rectTransform.anchorMax = new Vector2(1, 1);
-        pill.rectTransform.pivot = new Vector2(1, 1);
-        pill.rectTransform.anchoredPosition = new Vector2(-28, -24);
-        pill.rectTransform.sizeDelta = new Vector2(350, 44);
-        hud.StatusPill = pill;
-        hud.StatusText = Text(pill.transform, "Status", Vector2.zero, 22, FontStyle.Bold, Dark, 350, 44);
-        Stretch(hud.StatusText.rectTransform);
+        hud.SpeakerText = Text(dialogueBox, "Speaker", new Vector2(30, -20), 24, FontStyle.Bold, new Color(0.58f, 0.80f, 1f), 760, 36);
+        hud.QuestionText = Text(dialogueBox, "Question", new Vector2(30, -66), 36, FontStyle.Normal, Color.white, 1100, 100);
+        hud.InterimText = Text(dialogueBox, "Interim", new Vector2(30, -180), 21, FontStyle.Italic, new Color(0.68f, 0.72f, 0.78f), 1100, 34);
+        hud.StatusPill = null;
+        hud.StatusText = Text(dialogueBox, "Status_TEXT_ONLY", Vector2.zero, 20, FontStyle.Bold, new Color(0.43f, 0.66f, 1f), 330, 34);
+        hud.StatusText.alignment = TextAnchor.UpperRight;
+        hud.StatusText.rectTransform.anchorMin = hud.StatusText.rectTransform.anchorMax = new Vector2(1f, 1f);
+        hud.StatusText.rectTransform.pivot = new Vector2(1f, 1f);
+        hud.StatusText.rectTransform.anchoredPosition = new Vector2(-26f, -20f);
         hud.SetSpeaker("면접 패널");
         hud.SetQuestion("잠시 후 면접을 시작합니다.");
         hud.SetStatus("대기 중", HudTone.Ask);
@@ -275,7 +295,7 @@ public static class SceneBootstrap
         var canvasObject = new GameObject("NamePlate_" + label);
         canvasObject.transform.SetParent(parent, false);
         canvasObject.transform.localPosition = position;
-        canvasObject.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+        canvasObject.transform.localRotation = Quaternion.identity;
         var canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(420, 90);
@@ -287,12 +307,13 @@ public static class SceneBootstrap
         Stretch(text.rectTransform);
     }
 
-    private static void Fill(Transform parent, string name, Color color)
+    private static Image Fill(Transform parent, string name, Color color)
     {
         var image = new GameObject(name).AddComponent<Image>();
         image.transform.SetParent(parent, false);
         image.color = color;
         Stretch(image.rectTransform);
+        return image;
     }
 
     private static Text Text(Transform parent, string name, Vector2 position, int size, FontStyle style, Color color, float width, float height)

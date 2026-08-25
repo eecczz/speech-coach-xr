@@ -1,0 +1,7 @@
+SpeakUpXR URP interview lighting
+Generated: 2026-08-21 17:50:03
+SceneRoot: URP_InterviewLighting_EDIT_HERE
+Ambient: neutral flat 0.38/0.40/0.44
+Lights: directional key + candidate front fill + panel ceiling fill
+Preview: OK
+All lights are scene-authored and inspector-editable.

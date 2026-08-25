@@ -18,6 +18,9 @@ dist/
 
 # PoC outputs
 *.transcript.json
+*.log
+*.log.err
+pkg-inspect/
 services/audio-pipeline/samples/*
 !services/audio-pipeline/samples/.gitkeep
 
@@ -35,6 +38,40 @@ SpeakUpXR-Unity/UserSettings/
 SpeakUpXR-Unity/Builds/
 SpeakUpXR-Unity/*.csproj
 SpeakUpXR-Unity/*.sln
+
+# Local/imported Unity Asset Store and external model content
+*.unitypackage
+ThirdPartySources/
+SpeakUpXR-Unity/Assets/ThirdParty/
+SpeakUpXR-Unity/Assets/ThirdParty.meta
+SpeakUpXR-Unity/Assets/Enviroment/
+SpeakUpXR-Unity/Assets/Enviroment.meta
+SpeakUpXR-Unity/Assets/FORMAL_AVATAR/
+SpeakUpXR-Unity/Assets/FORMAL_AVATAR.meta
+# Convai Asset Store package is installed locally for integration testing only.
+SpeakUpXR-Unity/Assets/Convai SDK For Unity/
+SpeakUpXR-Unity/Assets/Convai SDK For Unity.meta
+# Native LiveKit runtime downloaded by the Convai editor after package import.
+SpeakUpXR-Unity/Assets/Convai/
+SpeakUpXR-Unity/Assets/Convai.meta
+# Convai credentials/settings stay machine-local; never commit a key entered in Unity.
+SpeakUpXR-Unity/Assets/Resources/ConvaiSettings.asset
+SpeakUpXR-Unity/Assets/Resources/ConvaiSettings.asset.meta
+SpeakUpXR-Unity/Assets/Resources.meta
+# Generated Convai sandbox artifacts contain references to the locally installed package.
+SpeakUpXR-Unity/Assets/SpeakUpXR/Scenes/ConvaiSandbox.unity
+SpeakUpXR-Unity/Assets/SpeakUpXR/Scenes/ConvaiSandbox.unity.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Materials/ConvaiSandbox/
+SpeakUpXR-Unity/Assets/SpeakUpXR/Materials/ConvaiSandbox.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Materials.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/UI/convai-sandbox-preview.png
+SpeakUpXR-Unity/Assets/SpeakUpXR/UI/convai-sandbox-preview.png.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Audio/
+SpeakUpXR-Unity/Assets/SpeakUpXR/Audio.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.fbx
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.FBX
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.fbx.meta
+SpeakUpXR-Unity/Assets/SpeakUpXR/Animations/**/*.FBX.meta
 
 # IDE / OS
 .vscode/

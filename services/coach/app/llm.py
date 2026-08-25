@@ -442,7 +442,7 @@ TrainingPrescription 형식: {"title": string, "addresses": string, "steps": str
 """
 
 
-# --------- Gemini (default) ----------
+# --------- Gemini (optional hosted provider) ----------
 
 _gemini_client = None
 
@@ -456,7 +456,7 @@ def _get_gemini():
     return _gemini_client
 
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 def generate_with_gemini(bundle: SessionBundle) -> ComprehensiveReport:
@@ -526,6 +526,151 @@ def generate_with_claude(bundle: SessionBundle) -> ComprehensiveReport:
     parsed: Optional[ComprehensiveReport] = response.parsed_output
     if parsed is None:
         raise RuntimeError(f"Claude returned unparseable output (stop_reason={response.stop_reason})")
+    if not parsed.session_id:
+        parsed.session_id = bundle.session_id
+    return _backfill_from_bundle(parsed, bundle)
+
+
+# --------- NVIDIA NIM / Kimi K2.6 (OpenAI-compatible) ----------
+
+_nvidia_client = None
+
+NVIDIA_BASE_URL = os.environ.get(
+    "NVIDIA_BASE_URL",
+    "https://integrate.api.nvidia.com/v1",
+)
+NVIDIA_CHAT_MODEL = os.environ.get(
+    "NVIDIA_CHAT_MODEL",
+    "moonshotai/kimi-k2.6",
+)
+
+
+def _get_nvidia():
+    global _nvidia_client
+    if _nvidia_client is None:
+        from openai import OpenAI
+
+        _nvidia_client = OpenAI(
+            base_url=NVIDIA_BASE_URL,
+            api_key=os.environ["NVIDIA_API_KEY"],
+        )
+    return _nvidia_client
+
+
+def _nvidia_chat(
+    messages: list[dict],
+    *,
+    temperature: float = 0.2,
+    max_tokens: int = 8000,
+):
+    """Call NVIDIA's free prototype NIM endpoint.
+
+    Kimi K2.6 is OpenAI-compatible but its hosted NIM currently does not expose
+    structured-output mode. Every caller therefore supplies a strict JSON
+    contract in the prompt and validates the returned object with Pydantic.
+    """
+    if not os.environ.get("NVIDIA_API_KEY"):
+        raise RuntimeError("NVIDIA_API_KEY not set")
+    kwargs = {
+        "model": NVIDIA_CHAT_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": 0.95,
+    }
+    return _get_nvidia().chat.completions.create(**kwargs)
+
+
+def _repair_nvidia_report(bundle: SessionBundle, raw_text: str, error: ValidationError) -> ComprehensiveReport:
+    response = _nvidia_chat(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "당신은 JSON 스키마 수정기입니다. 잘못된 평가 JSON을 "
+                    "ComprehensiveReport 스키마에 맞는 JSON 객체 하나로만 고치세요."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{JEONBUK_JSON_CONTRACT}\n\n"
+                    f"session_id는 반드시 {bundle.session_id!r} 입니다.\n"
+                    f"검증 오류:\n{error}\n\n잘못된 JSON 후보:\n{raw_text}\n\n"
+                    f"원본 입력:\n{_user_payload(bundle)}"
+                ),
+            },
+        ],
+        temperature=0.0,
+    )
+    return _parse_report_text(response.choices[0].message.content or "")
+
+
+def generate_with_nvidia(bundle: SessionBundle) -> ComprehensiveReport:
+    response = _nvidia_chat(
+        [
+            {"role": "system", "content": _compose_system_prompt(bundle.scenario)},
+            {
+                "role": "user",
+                "content": f"{_user_payload(bundle)}\n\n{JEONBUK_JSON_CONTRACT}",
+            },
+        ],
+        temperature=0.0,
+    )
+    content = response.choices[0].message.content or ""
+    try:
+        parsed = _parse_report_text(content)
+    except ValidationError as exc:
+        parsed = _repair_nvidia_report(bundle, content, exc)
+    if not parsed.session_id:
+        parsed.session_id = bundle.session_id
+    return _backfill_from_bundle(parsed, bundle)
+
+
+# --------- Ollama / local Qwen (unmetered default) ----------
+
+_ollama_client = None
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
+OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "qwen3.5:4b")
+
+
+def _get_ollama():
+    global _ollama_client
+    if _ollama_client is None:
+        from openai import OpenAI
+
+        _ollama_client = OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama", timeout=120.0)
+    return _ollama_client
+
+
+def _ollama_chat(
+    messages: list[dict],
+    *,
+    temperature: float = 0.2,
+    max_tokens: int = 4000,
+):
+    """Run the interview brain locally with no request quota or API key."""
+    return _get_ollama().chat.completions.create(
+        model=OLLAMA_CHAT_MODEL,
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        top_p=0.9,
+        response_format={"type": "json_object"},
+    )
+
+
+def generate_with_ollama(bundle: SessionBundle) -> ComprehensiveReport:
+    response = _ollama_chat(
+        [
+            {"role": "system", "content": _compose_system_prompt(bundle.scenario)},
+            {"role": "user", "content": f"{_user_payload(bundle)}\n\n{JEONBUK_JSON_CONTRACT}"},
+        ],
+        temperature=0.0,
+        max_tokens=6000,
+    )
+    content = response.choices[0].message.content or ""
+    parsed = _parse_report_text(content)
     if not parsed.session_id:
         parsed.session_id = bundle.session_id
     return _backfill_from_bundle(parsed, bundle)
@@ -628,7 +773,7 @@ def generate_with_jeonbuk(bundle: SessionBundle) -> ComprehensiveReport:
 
 # --------- Dispatcher ----------
 
-PROVIDER = os.environ.get("LLM_PROVIDER", "gemini").lower()
+PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
 
 
 def generate(bundle: SessionBundle) -> ComprehensiveReport:
@@ -638,6 +783,10 @@ def generate(bundle: SessionBundle) -> ComprehensiveReport:
         return generate_with_gemini(bundle)
     if PROVIDER == "jeonbuk":
         return generate_with_jeonbuk(bundle)
+    if PROVIDER in ("nvidia", "qwen"):
+        return generate_with_nvidia(bundle)
+    if PROVIDER in ("ollama", "local"):
+        return generate_with_ollama(bundle)
     raise RuntimeError(f"unknown LLM_PROVIDER: {PROVIDER!r}")
 
 
@@ -648,4 +797,8 @@ def provider_info() -> dict:
         return {"provider": "claude", "model": CLAUDE_MODEL}
     if PROVIDER == "jeonbuk":
         return {"provider": "jeonbuk", "model": JEONBUK_CHAT_MODEL, "base_url": JEONBUK_BASE_URL}
+    if PROVIDER in ("nvidia", "qwen"):
+        return {"provider": "nvidia-nim", "model": NVIDIA_CHAT_MODEL, "base_url": NVIDIA_BASE_URL}
+    if PROVIDER in ("ollama", "local"):
+        return {"provider": "ollama-local", "model": OLLAMA_CHAT_MODEL, "base_url": OLLAMA_BASE_URL}
     return {"provider": "gemini", "model": GEMINI_MODEL}

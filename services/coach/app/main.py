@@ -1,6 +1,7 @@
 """Coach service — L1 rule engine + L3 LLM comprehensive evaluation.
 
-LLM provider is selected via LLM_PROVIDER env var (gemini | claude). See llm.py.
+LLM provider is selected via LLM_PROVIDER env var
+(nvidia/Kimi | gemini | jeonbuk | claude | mock). See llm.py.
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ from .interview import (
     InterviewReportRequest,
     InterviewReportResponse,
     generate_next_question,
+    fallback_next_question,
     generate_interview_report,
+    fallback_interview_report,
 )
 from .tts import TtsRequest, synthesize_audio
 
@@ -155,8 +158,9 @@ async def interview_next(req: InterviewNextRequest):
             f"error={type(e).__name__}: {e}",
             flush=True,
         )
-        # Soft-fail: end the interview gracefully rather than 500-ing the client.
-        return InterviewNextResponse(question=None, kind="closing", done=True)
+        # Provider quota/network failures must not look like a legitimate end of
+        # interview. Continue with an answer-aware local follow-up instead.
+        return fallback_next_question(req)
 
 
 @app.post("/interview/report", response_model=InterviewReportResponse)
@@ -182,9 +186,9 @@ async def interview_report(req: InterviewReportRequest):
             f"error={type(e).__name__}: {e}",
             flush=True,
         )
-        return JSONResponse(
-            {"error": f"{type(e).__name__}: {e}"}, status_code=502
-        )
+        # A provider quota/network failure must not strand the frozen XR scene.
+        # Return an evidence-based local report with HTTP 200 so the report UI opens.
+        return fallback_interview_report(req)
 
 
 @app.post("/interview/tts")

@@ -1,0 +1,20 @@
+Convai 4.5.0 Sandbox validation
+Generated: 2026-08-25 13:11:58
+Operation: 기존 시험 씬 검증
+SourceScene: Assets/Convai SDK For Unity/Samples/LipSyncSample/Scenes/LipSync Sample.unity
+TargetScene: Assets/SpeakUpXR/Scenes/ConvaiSandbox.unity
+ConvaiPlayer: FOUND
+ConvaiCharacter: FOUND
+CharacterId: e41f5270-7378-478f-b037-391f0be4a269
+IncludedCharacter: Sofia (female only)
+SkinnedMeshes: 14
+FacialBlendShapes: 948
+LipSyncComponents: 1
+EmotionComponents: 2
+GazeComponents: 2
+BuiltInRenderSetup: OK_27_MATERIALS
+PreviewRender: OK
+ExactScriptedSpeech: ConvaiCharacter.SendNarrativeSpeech(string) FOUND
+ExactSpeechResult: dashboard Korean voice + remote audio + transcript + emotion + lip-sync stream
+GeneratedConversationRoute: ConvaiPlayer.SendTextMessage(string)
+RequiredToRun: Convai API key and network connection

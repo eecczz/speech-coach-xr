@@ -1,0 +1,16 @@
+SpeakUpXR Convai exact Korean speech runtime proof
+Observed: 2026-08-21 17:58:29-17:58:37 KST
+Status: PASS
+Character: Kim Minseo
+CharacterId: 00b8c5b0-9d36-11f1-9de0-42010a7be02f
+Route: ConvaiCharacter.SendNarrativeSpeech(string)
+ExactTranscript: 안녕하세요. 지원하신 직무와 본인의 강점을 간단히 소개해 주시겠습니까?
+RemoteAudioBytes: 489510
+AudioDurationSeconds: 5.55
+ServerLipSyncFrames: 333
+ReceivedLipSyncFrames: 333
+LipSyncFps: 60
+RecoveredGaps: 0
+Clock: SampleLocked
+CompletionReason: AudioBoundary
+EvidenceSource: Unity Editor.log Convai RTVIHandler + LipSyncProtocolIngress + ConvaiLipSyncBridge

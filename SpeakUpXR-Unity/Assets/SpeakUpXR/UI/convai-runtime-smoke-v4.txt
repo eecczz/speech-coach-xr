@@ -1,0 +1,8 @@
+SpeakUpXR Convai runtime Korean speech test
+Generated: 2026-08-21 17:59:16
+Status: TIMEOUT
+CharacterId: 00b8c5b0-9d36-11f1-9de0-42010a7be02f
+Transcript: 
+Emotion: neutral
+Diagnostic: 정확한 한국어 대사를 Convai Narrative Speech로 전송했습니다. 음성·Viseme·감정을 확인하세요.
+Check Convai entitlement, API key, network, and character readiness in Console.

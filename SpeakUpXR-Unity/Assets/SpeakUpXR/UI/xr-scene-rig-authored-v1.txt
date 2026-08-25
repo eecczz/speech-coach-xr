@@ -1,0 +1,2 @@
+Standard XROrigin + bound HMD/left/right TrackedPoseDriver + XRInteractionManager.
+Three independent interviewer Animators; persistent LateUpdate head tracking; subtle speaking nods.

@@ -1,0 +1,4 @@
+Scene-authored first-person Formal candidate installed.
+Camera: humanoid head bone at runtime.
+Entrance: root-motion Walk -> Stand To Sit -> Sitting Idle.
+HUD: bottom dialogue layout in desktop and head-locked world-space in XR.

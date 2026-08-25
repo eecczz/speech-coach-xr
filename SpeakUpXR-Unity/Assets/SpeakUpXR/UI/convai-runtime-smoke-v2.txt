@@ -1,0 +1,6 @@
+SpeakUpXR Convai runtime Korean speech test
+Generated: 2026-08-21 17:51:28
+Status: CONNECTION_TIMEOUT
+CharacterId: 00b8c5b0-9d36-11f1-9de0-42010a7be02f
+Diagnostic: Convai Player/Character 연결 확인. API 키와 네트워크 연결 후 시험 프롬프트를 보낼 수 있습니다.
+Convai character did not reach IsInConversation within 60 seconds.
