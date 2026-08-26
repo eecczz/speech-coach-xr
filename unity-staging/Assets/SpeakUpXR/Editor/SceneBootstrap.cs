@@ -115,7 +115,7 @@ public static class SceneBootstrap
         Box(root.transform, "DeskFront", new Vector3(0, 0.38f, 1.68f), new Vector3(4.8f, 0.72f, 0.05f), Wood * 0.8f);
 
         string[] ids = { "warm", "analytical", "challenging" };
-        string[] names = { "따뜻한 인사 담당", "분석적인 실무 담당", "압박형 임원 담당" };
+        string[] names = { "인사 면접관", "기술 면접관", "임원 면접관" };
         string[] voices = { "ko-KR-SunHiNeural", "ko-KR-HyunsuNeural", "ko-KR-InJoonNeural" };
         int[] rates = { -4, 0, -6 };
         int[] pitches = { 2, 0, -4 };
@@ -266,7 +266,7 @@ public static class SceneBootstrap
         var canvasObject = new GameObject("NamePlate_" + label);
         canvasObject.transform.SetParent(parent, false);
         canvasObject.transform.localPosition = position;
-        canvasObject.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+        canvasObject.transform.localRotation = Quaternion.identity;
         var canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(420, 90);

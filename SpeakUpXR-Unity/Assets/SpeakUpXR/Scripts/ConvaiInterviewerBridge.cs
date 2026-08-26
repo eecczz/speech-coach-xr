@@ -24,8 +24,8 @@ namespace SpeakUpXR
         [SerializeField] private MonoBehaviour convaiCharacter;
 
         [Header("Exact scripted speech")]
-        [Range(0.5f, 12f)] public float SpeechStartTimeoutSeconds = 4f;
-        [Range(5f, 60f)] public float SpeechStopTimeoutSeconds = 35f;
+        [Range(4f, 60f)] public float SpeechStartTimeoutSeconds = 30f;
+        [Range(5f, 90f)] public float SpeechStopTimeoutSeconds = 60f;
 
         [Header("Runtime evidence (read only)")]
         [SerializeField] private bool packageAvailable;
@@ -47,10 +47,12 @@ namespace SpeakUpXR
         private Delegate _emotionHandler;
         private bool _speechStarted;
         private bool _speechStopped;
+        private bool _requestPending;
 
         public bool PackageAvailable => packageAvailable;
         public bool ConversationReady => conversationReady;
         public bool IsRemoteSpeaking => remoteSpeaking;
+        public bool IsSpeechPending => _requestPending;
         public string Diagnostic => diagnostic;
 
         private void Awake()
@@ -78,6 +80,7 @@ namespace SpeakUpXR
         {
             _speechStarted = false;
             _speechStopped = false;
+            _requestPending = false;
             remoteSpeaking = false;
             conversationReady = false;
             lastTranscript = string.Empty;
@@ -88,7 +91,12 @@ namespace SpeakUpXR
         private void Update()
         {
             conversationReady = ReadBool("IsInConversation");
-            remoteSpeaking = ReadBool("IsSpeaking");
+            bool speakingNow = ReadBool("IsSpeaking");
+            if (speakingNow != remoteSpeaking)
+            {
+                remoteSpeaking = speakingNow;
+                _owner?.SetExternalSpeaking(speakingNow);
+            }
         }
 
         [ContextMenu("Convai: 다시 연결 찾기")]
@@ -123,10 +131,12 @@ namespace SpeakUpXR
                 yield break;
             }
 
-            conversationReady = ReadBool("IsInConversation");
+            float readyDeadline = Time.realtimeSinceStartup + Mathf.Max(20f, SpeechStartTimeoutSeconds);
+            while (!(conversationReady = ReadBool("IsInConversation")) && Time.realtimeSinceStartup < readyDeadline)
+                yield return null;
             if (!conversationReady)
             {
-                diagnostic = $"{CharacterName}: Convai 대화 연결 전이므로 이번 대사는 기존 TTS로 재생합니다.";
+                diagnostic = $"{CharacterName}: Convai 대화 연결을 완료하지 못했습니다.";
                 completed?.Invoke(false);
                 yield break;
             }
@@ -139,18 +149,29 @@ namespace SpeakUpXR
                 null);
             if (speechMethod == null)
             {
-                diagnostic = "Convai SDK에 SendNarrativeSpeech(string)가 없어 기존 TTS로 대체합니다.";
+                diagnostic = "Convai SDK에 SendNarrativeSpeech(string)가 없습니다.";
                 completed?.Invoke(false);
                 yield break;
             }
 
+            _requestPending = true;
             _speechStarted = false;
             _speechStopped = false;
             lastTranscript = string.Empty;
-            speechMethod.Invoke(convaiCharacter, new object[] { text });
+            try
+            {
+                speechMethod.Invoke(convaiCharacter, new object[] { text });
+            }
+            catch (Exception exception)
+            {
+                _requestPending = false;
+                diagnostic = $"{CharacterName}: Narrative Speech 전송 실패: {exception.GetBaseException().Message}";
+                completed?.Invoke(false);
+                yield break;
+            }
             diagnostic = $"{CharacterName}: 정확한 대사를 Convai Narrative Speech로 전송했습니다.";
 
-            float startDeadline = Time.realtimeSinceStartup + SpeechStartTimeoutSeconds;
+            float startDeadline = Time.realtimeSinceStartup + Mathf.Max(20f, SpeechStartTimeoutSeconds);
             while (!_speechStarted && Time.realtimeSinceStartup < startDeadline)
             {
                 // Some Convai SDK versions do not emit OnSpeechStarted again after
@@ -168,16 +189,26 @@ namespace SpeakUpXR
             }
             if (!_speechStarted)
             {
-                diagnostic = $"{CharacterName}: Convai 음성 시작 시간 초과. 기존 TTS로 대체합니다.";
+                _requestPending = false;
+                diagnostic = $"{CharacterName}: Convai 음성 시작 시간 초과.";
                 completed?.Invoke(false);
                 yield break;
             }
 
             completed?.Invoke(true);
             float stopDeadline = Time.realtimeSinceStartup + SpeechStopTimeoutSeconds;
+            float silentSince = -1f;
             while (!_speechStopped && Time.realtimeSinceStartup < stopDeadline)
             {
-                if (_speechStarted && !ReadBool("IsSpeaking"))
+                if (ReadBool("IsSpeaking"))
+                {
+                    silentSince = -1f;
+                }
+                else if (silentSince < 0f)
+                {
+                    silentSince = Time.realtimeSinceStartup;
+                }
+                else if (Time.realtimeSinceStartup - silentSince >= 0.18f)
                 {
                     _speechStopped = true;
                     remoteSpeaking = false;
@@ -185,6 +216,7 @@ namespace SpeakUpXR
                 }
                 yield return null;
             }
+            _requestPending = false;
             _owner?.SetExternalSpeaking(false);
             diagnostic = _speechStopped
                 ? $"{CharacterName}: Convai 음성·립싱크 턴 완료."
@@ -240,6 +272,7 @@ namespace SpeakUpXR
 
         private void OnSpeechStarted()
         {
+            if (!_requestPending) return;
             _speechStarted = true;
             _speechStopped = false;
             remoteSpeaking = true;
@@ -248,6 +281,7 @@ namespace SpeakUpXR
 
         private void OnSpeechStopped()
         {
+            if (!_requestPending) return;
             _speechStopped = true;
             remoteSpeaking = false;
             _owner?.SetExternalSpeaking(false);

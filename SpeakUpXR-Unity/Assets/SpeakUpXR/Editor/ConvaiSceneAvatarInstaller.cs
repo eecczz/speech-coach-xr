@@ -16,7 +16,7 @@ namespace SpeakUpXR.Editor
     /// Interview.unity. The previous Formal Character visuals are retained as inactive
     /// scene children. Nothing is spawned or positioned at gameplay runtime.
     /// </summary>
-    // Scene installation revision 2: preserve seated body while Convai drives the face.
+    // Scene installation revision 9: official Convai CC face rigs (2 male / 1 female).
     internal static class ConvaiSceneAvatarInstaller
     {
         private const string InterviewScene = "Assets/SpeakUpXR/Scenes/Interview.unity";
@@ -26,6 +26,8 @@ namespace SpeakUpXR.Editor
         private const string CharacterTypeName = "Convai.Runtime.Components.ConvaiCharacter";
         private const string ManagerTypeName = "Convai.Runtime.Components.ConvaiManager";
         private const string RoomManagerTypeName = "Convai.Runtime.Adapters.Networking.ConvaiRoomManager";
+        private const string OfficialMaterialRoot =
+            "Assets/ThirdParty/ConvaiOfficialSamples/GeneratedURPMaterials";
 
         private static readonly string[] CharacterIds =
         {
@@ -41,6 +43,20 @@ namespace SpeakUpXR.Editor
             "Park Seongho",
         };
 
+        private static readonly string[] VisualPaths =
+        {
+            "Assets/ThirdParty/ConvaiOfficialSamples/ChristinaSmith/Christina_Smith.Fbx",
+            "Assets/ThirdParty/ConvaiOfficialSamples/KevinShaw/Kevin_Shaw.Fbx",
+            "Assets/ThirdParty/ConvaiOfficialSamples/KevinShaw/Kevin_Shaw.Fbx",
+        };
+
+        private static readonly string[] TextureRoots =
+        {
+            "Assets/ThirdParty/ConvaiOfficialSamples/ChristinaSmith/Christina_Smith.fbm",
+            "Assets/ThirdParty/ConvaiOfficialSamples/KevinShaw/Kevin_Shaw.fbm",
+            "Assets/ThirdParty/ConvaiOfficialSamples/KevinShaw/Kevin_Shaw.fbm",
+        };
+
         [InitializeOnLoadMethod]
         private static void ScheduleInstall()
         {
@@ -53,7 +69,7 @@ namespace SpeakUpXR.Editor
         private static void InstallIfNeeded()
         {
             if (File.Exists(ReportPath) &&
-                File.ReadAllText(ReportPath).Contains("ValidationRevision: 6")) return;
+                File.ReadAllText(ReportPath).Contains("ValidationRevision: 9")) return;
             Install(force: false);
         }
 
@@ -62,6 +78,11 @@ namespace SpeakUpXR.Editor
             if (EditorApplication.isCompiling || EditorApplication.isUpdating ||
                 EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
+            if (EnsureHumanoidVisualImports())
+            {
+                EditorApplication.delayCall += InstallIfNeeded;
+                return;
+            }
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(InterviewScene) == null ||
                 AssetDatabase.LoadAssetAtPath<SceneAsset>(SourceScene) == null)
             {
@@ -91,6 +112,11 @@ namespace SpeakUpXR.Editor
                 if (!panel || panel.Members == null || panel.Members.Length < 3)
                     throw new InvalidOperationException("Interview 씬의 3인 InterviewerPanel 구성이 없습니다.");
 
+                RuntimeAnimatorController sharedSeatedController = panel.Members
+                    .Where(item => item && item.CharacterAnimator && item.CharacterAnimator.runtimeAnimatorController)
+                    .Select(item => item.CharacterAnimator.runtimeAnimatorController)
+                    .FirstOrDefault();
+
                 var installedCharacters = new List<Component>();
                 var report = new List<string>
                 {
@@ -100,9 +126,10 @@ namespace SpeakUpXR.Editor
                     "LegacyFormalCharacters: PRESERVED + INACTIVE",
                     "Speech: Convai Narrative Speech / Korean dashboard voices",
                     "Face: server visemes + Convai emotion blendshape stream",
-                    "CurrentLocalFaceModelInventory: Sofia only (three independent instances)",
+                    "CurrentLocalFaceModelInventory: official Convai CC4 female + official Convai CC4 male x2",
+                    "MaleVariant: Park Seongho uses an independently authored navy clothing material set",
                     "SampleDriversNormalized: YES (Convai body graph + free conversation flow disabled)",
-                    "ValidationRevision: 6",
+                    "ValidationRevision: 9",
                 };
 
                 for (int i = 0; i < 3; i++)
@@ -112,7 +139,8 @@ namespace SpeakUpXR.Editor
 
                     RuntimeAnimatorController seatedController = member.CharacterAnimator
                         ? member.CharacterAnimator.runtimeAnimatorController
-                        : null;
+                        : sharedSeatedController;
+                    if (!seatedController) seatedController = sharedSeatedController;
                     PreserveLegacyAvatar(member);
                     RemoveDirectLegacyCharacterComponent(member, characterType);
 
@@ -124,18 +152,37 @@ namespace SpeakUpXR.Editor
                     avatar.transform.localScale = Vector3.one;
                     avatar.SetActive(true);
 
+                    GameObject visualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(VisualPaths[i]);
+                    if (!visualPrefab)
+                        throw new InvalidOperationException($"Convai 얼굴 타깃 모델을 찾지 못했습니다: {VisualPaths[i]}");
+                    GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(visualPrefab, avatar.transform);
+                    visual.name = $"{CharacterNames[i].Replace(" ", "_")}_BUSINESS_VISUAL";
+                    visual.transform.localPosition = Vector3.zero;
+                    visual.transform.localRotation = Quaternion.identity;
+                    visual.transform.localScale = Vector3.one;
+                    visual.SetActive(true);
+                    ApplyOfficialUrpMaterials(visual, i);
+
+                    Renderer[] visualRenderers = visual.GetComponentsInChildren<Renderer>(true);
+                    var visualRendererSet = new HashSet<Renderer>(visualRenderers);
+                    foreach (Renderer sourceRenderer in avatar.GetComponentsInChildren<Renderer>(true))
+                        if (!visualRendererSet.Contains(sourceRenderer)) sourceRenderer.enabled = false;
+
                     Component character = FindComponentByType(avatar, characterType);
                     if (!character) throw new InvalidOperationException($"{avatar.name}에 ConvaiCharacter가 없습니다.");
                     ConfigureCharacter(character, CharacterIds[i], CharacterNames[i]);
                     installedCharacters.Add(character);
                     DisableConflictingSampleDrivers(avatar);
 
-                    Animator animator = avatar.GetComponentInChildren<Animator>(true);
+                    Animator animator = visual.GetComponentInChildren<Animator>(true);
                     if (!animator || !animator.avatar || !animator.avatar.isValid || !animator.avatar.isHuman)
                         throw new InvalidOperationException($"{avatar.name}의 Humanoid Animator가 유효하지 않습니다.");
                     if (seatedController) animator.runtimeAnimatorController = seatedController;
                     animator.applyRootMotion = false;
                     animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                    foreach (Animator sourceAnimator in avatar.GetComponentsInChildren<Animator>(true))
+                        if (sourceAnimator != animator) sourceAnimator.enabled = false;
+                    ConfigureLipSyncTargets(avatar, visualRenderers.OfType<SkinnedMeshRenderer>().ToArray());
 
                     InterviewerHeadTracker tracker = animator.GetComponent<InterviewerHeadTracker>() ??
                                                      animator.gameObject.AddComponent<InterviewerHeadTracker>();
@@ -171,7 +218,7 @@ namespace SpeakUpXR.Editor
                         member.GetComponent<ConvaiFacialSpeechFallback>() ??
                         member.gameObject.AddComponent<ConvaiFacialSpeechFallback>();
                     facialFallback.Owner = member;
-                    facialFallback.FaceRoot = avatar;
+                    facialFallback.FaceRoot = visual;
                     facialFallback.Rebind();
                     EditorUtility.SetDirty(member);
                     EditorUtility.SetDirty(bridge);
@@ -179,17 +226,17 @@ namespace SpeakUpXR.Editor
                     EditorUtility.SetDirty(tracker);
                     EditorUtility.SetDirty(facialFallback);
 
-                    int blendShapes = CountBlendShapes(avatar);
+                    int blendShapes = CountBlendShapes(visual);
                     int lipSync = CountNamedComponents(avatar, "LipSync");
                     int emotion = CountNamedComponents(avatar, "Emotion");
                     int gaze = CountNamedComponents(avatar, "Gaze") + CountNamedComponents(avatar, "LookAt");
                     int missingScripts = CountMissingScripts(avatar);
                     int enabledConflicts = CountEnabledSampleDriverConflicts(avatar);
                     report.Add($"[{i + 1}] {member.DisplayName}: {CharacterNames[i]} / {CharacterIds[i]} / " +
-                               $"Avatar={avatar.name} / BlendShapes={blendShapes} / " +
+                               $"Avatar={visual.name} / BlendShapes={blendShapes} / " +
                                $"LipSync={lipSync} / Emotion={emotion} / Gaze={gaze} / SeatedAnimator={(seatedController ? "BOUND" : "SOURCE")}");
                     report.Add($"    MissingScripts={missingScripts} / EnabledConflictingSampleDrivers={enabledConflicts} / " +
-                               "LocalFacialFallback=READY");
+                               "TimestampedServerVisemes=BOUND / LocalExpressions=BOUND");
                 }
 
                 DisableUnusedConvaiCharacters(interview, installedCharacters, characterType);
@@ -215,6 +262,163 @@ namespace SpeakUpXR.Editor
                 if (closeInterview && interview.IsValid() && interview.isLoaded)
                     EditorSceneManager.CloseScene(interview, true);
             }
+        }
+
+        private static bool EnsureHumanoidVisualImports()
+        {
+            bool changed = false;
+            foreach (string path in VisualPaths)
+            {
+                if (AssetImporter.GetAtPath(path) is not ModelImporter importer) continue;
+                bool needsReimport = importer.animationType != ModelImporterAnimationType.Human ||
+                                     importer.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel ||
+                                     !importer.importBlendShapes;
+                if (!needsReimport) continue;
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.importBlendShapes = true;
+                importer.SaveAndReimport();
+                changed = true;
+            }
+            return changed;
+        }
+
+        private static void ApplyOfficialUrpMaterials(GameObject visual, int characterIndex)
+        {
+            string textureRoot = TextureRoots[characterIndex];
+            bool navyVariant = characterIndex == 2;
+            foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>(true))
+            {
+                string[] names = GetMaterialNames(renderer.gameObject.name);
+                if (names == null || names.Length == 0) continue;
+                var materials = new Material[names.Length];
+                for (int slot = 0; slot < names.Length; slot++)
+                    materials[slot] = GetOrCreateUrpMaterial(
+                        names[slot], textureRoot, navyVariant && IsClothing(names[slot]));
+                renderer.sharedMaterials = materials;
+                EditorUtility.SetDirty(renderer);
+            }
+        }
+
+        private static string[] GetMaterialNames(string rendererName)
+        {
+            if (rendererName.StartsWith("Fit_shirts", StringComparison.Ordinal)) return new[] { "Fit_shirts" };
+            if (rendererName.StartsWith("Slim_fit_pants", StringComparison.Ordinal)) return new[] { "Slim_fit_pants" };
+            if (rendererName.StartsWith("Sport_sneakers", StringComparison.Ordinal)) return new[] { "Sport_sneakers" };
+            if (rendererName.StartsWith("Side_part_wavy", StringComparison.Ordinal) ||
+                rendererName.StartsWith("Classic_short", StringComparison.Ordinal))
+                return new[] { "Scalp_Transparency", "Hair_Transparency" };
+            if (rendererName.StartsWith("Camila_Brow", StringComparison.Ordinal))
+                return new[] { "Female_Brow_Transparency", "Female_Brow_Base_Transparency" };
+            if (rendererName.StartsWith("Male_Brow", StringComparison.Ordinal))
+                return new[] { "Male_Brow_Transparency", "Male_Brow_Base_Transparency" };
+            if (rendererName.StartsWith("CC_Base_TearLine", StringComparison.Ordinal))
+                return new[] { "Std_Tearline_R", "Std_Tearline_L" };
+            if (rendererName.StartsWith("CC_Base_Tongue", StringComparison.Ordinal)) return new[] { "Std_Tongue" };
+            if (rendererName.StartsWith("CC_Base_Teeth", StringComparison.Ordinal))
+                return new[] { "Std_Upper_Teeth", "Std_Lower_Teeth" };
+            if (rendererName.StartsWith("CC_Base_Body", StringComparison.Ordinal))
+                return new[]
+                {
+                    "Std_Skin_Head", "Std_Skin_Body", "Std_Skin_Arm", "Std_Skin_Leg", "Std_Nails", "Std_Eyelash",
+                };
+            if (rendererName.StartsWith("CC_Base_EyeOcclusion", StringComparison.Ordinal))
+                return new[] { "Std_Eye_Occlusion_R", "Std_Eye_Occlusion_L" };
+            if (rendererName.StartsWith("CC_Base_Eye", StringComparison.Ordinal))
+                return new[] { "Std_Eye_R", "Std_Cornea_R", "Std_Eye_L", "Std_Cornea_L" };
+            if (rendererName.StartsWith("Sphere01", StringComparison.Ordinal)) return new[] { "_1_Default" };
+            return null;
+        }
+
+        private static bool IsClothing(string materialName) =>
+            materialName == "Fit_shirts" || materialName == "Slim_fit_pants" || materialName == "Sport_sneakers";
+
+        private static Material GetOrCreateUrpMaterial(string materialName, string textureRoot, bool navyVariant)
+        {
+            string modelFolder = textureRoot.IndexOf("Christina", StringComparison.OrdinalIgnoreCase) >= 0
+                ? "ChristinaSmith"
+                : navyVariant ? "KevinShawNavy" : "KevinShaw";
+            string directory = $"{OfficialMaterialRoot}/{modelFolder}";
+            EnsureAssetFolder(directory);
+            string path = $"{directory}/{SanitizeAssetName(materialName)}.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            if (!material)
+            {
+                material = new Material(shader) { name = materialName + (navyVariant ? " Navy" : string.Empty) };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
+            Texture2D diffuse = LoadTexture(textureRoot, materialName + "_Diffuse");
+            Texture2D normal = LoadTexture(textureRoot, materialName + "_Normal") ??
+                               LoadTexture(textureRoot, materialName + "_Bump");
+            if (diffuse)
+            {
+                if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", diffuse);
+                if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", diffuse);
+            }
+            if (normal)
+            {
+                if (material.HasProperty("_BumpMap")) material.SetTexture("_BumpMap", normal);
+                material.EnableKeyword("_NORMALMAP");
+            }
+
+            Color tint = Color.white;
+            if (navyVariant && materialName == "Fit_shirts") tint = new Color(0.28f, 0.36f, 0.55f, 1f);
+            if (navyVariant && materialName == "Slim_fit_pants") tint = new Color(0.42f, 0.45f, 0.52f, 1f);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", tint);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", tint);
+
+            bool transparent = materialName.IndexOf("Transparency", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               materialName.IndexOf("Eyelash", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               materialName.IndexOf("Tearline", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               materialName.IndexOf("Cornea", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               materialName.IndexOf("Occlusion", StringComparison.OrdinalIgnoreCase) >= 0;
+            ConfigureSurface(material, transparent);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        private static Texture2D LoadTexture(string root, string stem)
+        {
+            foreach (string extension in new[] { ".png", ".jpg", ".jpeg", ".tga" })
+            {
+                Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>($"{root}/{stem}{extension}");
+                if (texture) return texture;
+            }
+            return null;
+        }
+
+        private static void ConfigureSurface(Material material, bool transparent)
+        {
+            if (!material.HasProperty("_Surface")) return;
+            material.SetFloat("_Surface", transparent ? 1f : 0f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_ZWrite", transparent ? 0f : 1f);
+            material.renderQueue = transparent ? 3000 : -1;
+            if (transparent) material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            else material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        }
+
+        private static void EnsureAssetFolder(string path)
+        {
+            string current = "Assets";
+            foreach (string part in path.Substring("Assets/".Length).Split('/'))
+            {
+                string next = current + "/" + part;
+                if (!AssetDatabase.IsValidFolder(next)) AssetDatabase.CreateFolder(current, part);
+                current = next;
+            }
+        }
+
+        private static string SanitizeAssetName(string value)
+        {
+            foreach (char invalid in Path.GetInvalidFileNameChars()) value = value.Replace(invalid, '_');
+            return value;
         }
 
         private static void PreserveLegacyAvatar(InterviewerController member)
@@ -385,6 +589,31 @@ namespace SpeakUpXR.Editor
                 behaviour.enabled = false;
                 EditorUtility.SetDirty(behaviour);
             }
+        }
+
+        private static void ConfigureLipSyncTargets(GameObject avatar, SkinnedMeshRenderer[] renderers)
+        {
+            MonoBehaviour lipSync = avatar.GetComponentsInChildren<MonoBehaviour>(true)
+                .FirstOrDefault(component => component &&
+                    component.GetType().FullName == "Convai.Modules.LipSync.ConvaiLipSyncComponent");
+            if (!lipSync) throw new InvalidOperationException("ConvaiLipSyncComponent를 찾지 못했습니다.");
+            if (renderers == null || renderers.Length == 0)
+                throw new InvalidOperationException("커스텀 면접관의 SkinnedMeshRenderer가 없습니다.");
+
+            SerializedObject serialized = new SerializedObject(lipSync);
+            SerializedProperty targets = serialized.FindProperty("_targetMeshes");
+            if (targets == null) throw new InvalidOperationException("Convai LipSync target 필드를 찾지 못했습니다.");
+            targets.arraySize = renderers.Length;
+            for (int i = 0; i < renderers.Length; i++)
+                targets.GetArrayElementAtIndex(i).objectReferenceValue = renderers[i];
+            SerializedProperty smoothing = serialized.FindProperty("_smoothingFactor");
+            if (smoothing != null) smoothing.floatValue = 0.12f;
+            SerializedProperty fadeIn = serialized.FindProperty("_fadeInDuration");
+            if (fadeIn != null) fadeIn.floatValue = 0.035f;
+            SerializedProperty offset = serialized.FindProperty("_timeOffset");
+            if (offset != null) offset.floatValue = 0f;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(lipSync);
         }
 
         private static Component FindBehaviour(Scene scene, string typeName)

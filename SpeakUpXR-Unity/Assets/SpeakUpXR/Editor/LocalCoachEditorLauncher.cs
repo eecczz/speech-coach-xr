@@ -8,6 +8,7 @@ using UnityEngine;
 public static class LocalCoachEditorLauncher
 {
     private const int CoachPort = 8002;
+    private const int OllamaPort = 11434;
 
     static LocalCoachEditorLauncher()
     {
@@ -24,7 +25,9 @@ public static class LocalCoachEditorLauncher
     [MenuItem("SpeakUpXR/Start Local Coach + TTS")]
     public static void StartIfNeeded()
     {
-        if (IsListening()) return;
+        // Port 8002 can remain alive while the actual Ollama inference process has
+        // stopped. Treat the local AI as ready only when both services are reachable.
+        if (IsListening(CoachPort) && IsListening(OllamaPort)) return;
 
         string script = Path.GetFullPath(Path.Combine(Application.dataPath, "../../services/coach/run.ps1"));
         if (!File.Exists(script))
@@ -43,15 +46,16 @@ public static class LocalCoachEditorLauncher
             WindowStyle = ProcessWindowStyle.Hidden,
         };
         Process.Start(start);
-        UnityEngine.Debug.Log("[SpeakUpXR] Starting local coach/TTS service on 127.0.0.1:8002. The entrance sequence gives it time to become ready.");
+        UnityEngine.Debug.Log(
+            "[SpeakUpXR] Starting/checking Ollama on 127.0.0.1:11434 and coach/TTS on 127.0.0.1:8002.");
     }
 
-    private static bool IsListening()
+    private static bool IsListening(int port)
     {
         try
         {
             using var client = new TcpClient();
-            var connection = client.BeginConnect("127.0.0.1", CoachPort, null, null);
+            var connection = client.BeginConnect("127.0.0.1", port, null, null);
             return connection.AsyncWaitHandle.WaitOne(120) && client.Connected;
         }
         catch

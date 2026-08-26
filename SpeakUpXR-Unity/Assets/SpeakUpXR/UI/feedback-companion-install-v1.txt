@@ -1,0 +1,10 @@
+Fantasy Monster feedback companion installation
+Generated: 2026-08-26 20:19:49
+Revision: 1
+Prefab: Assets/Stylized3DMonster/Monster40/Prefab/Monster40_01.prefab
+Animator: BOUND
+HeadAnchor: Main Camera
+LocalOffset: (-0.43, 0.24, 0.85)
+FeedbackTTS: DISABLED
+TypewriterDialogue: ENABLED
+SceneAuthored: YES

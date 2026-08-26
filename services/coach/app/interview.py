@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -43,13 +45,29 @@ class InterviewNextRequest(BaseModel):
 
 
 class InterviewNextResponse(BaseModel):
-    question: Optional[str] = None
-    kind: QuestionKind = "base"
-    done: bool = False
-    reaction: Optional[str] = None
+    question: Optional[str] = Field(
+        default=None,
+        description="실제로 말할 한국어 면접 질문. 첫 턴과 진행 중에는 반드시 구체적 문장이며 종료 턴에만 null",
+    )
+    kind: QuestionKind = Field(default="base", description="이번 질문의 유형")
+    done: bool = Field(default=False, description="질문 수가 최대치에 도달한 종료 턴에만 true")
+    reaction: Optional[str] = Field(default=None, description="직전 답변에 근거한 짧은 반응. 첫 턴에는 null")
     reaction_tone: Optional[Literal["warm", "neutral", "challenging"]] = None
     reaction_speaker: Optional[Literal["warm", "analytical", "challenging"]] = None
     question_speaker: Literal["warm", "analytical", "challenging"] = "analytical"
+
+
+class LocalQuestionOutput(BaseModel):
+    question: str = Field(description="지원 상황과 대화 기록에 맞는 실제 한국어 면접 질문 한 문장")
+    reaction: Optional[str] = Field(default=None, description="직전 답변에 근거한 짧은 면접관 반응. 첫 질문이면 null")
+    speaker: Literal["warm", "analytical", "challenging"] = Field(
+        default="analytical", description="이 질문에 가장 어울리는 면접관"
+    )
+
+
+class LocalClosingOutput(BaseModel):
+    closing: str = Field(description="지원자에게 말할 실제 한국어 면접 종료 인사 한 문장")
+    speaker: Literal["warm", "analytical", "challenging"] = "warm"
 
 
 class InterviewReportRequest(BaseModel):
@@ -79,29 +97,22 @@ def _next_system_prompt(cfg: InterviewConfig) -> str:
         "보통": "기본 질문과 답변에 근거한 꼬리 질문을 균형 있게 사용하세요.",
         "어려움": "답변의 빈틈을 확인하는 꼬리·압박 질문을 사용하되 무례하게 말하지 마세요.",
     }[cfg.difficulty]
-    return f"""당신은 실제 채용 면접의 세 명 면접관 패널입니다.
-프로젝트: '{cfg.project_name}'. 지원 분야: '{cfg.job_role}'.{situation}{topic}{goals}
-난이도: {cfg.difficulty}. {pressure}
-
-직전 답변을 반영하여 다음 질문 하나를 한국어 두 문장 이내로 만드세요.
-- 첫 질문이라면 자기소개를 기계적으로 묻지 말고, 지원 분야·상황·핵심 주제에 가장 자연스러운 실제 면접 질문부터 시작하세요. 첫 질문의 reaction은 null입니다.
-- 추상적인 답변에는 구체적 사례를 묻고, 사례에는 STAR(상황·과제·행동·결과) 중 빠진 부분을 물으세요.
-- 같은 질문이나 이미 답한 주제를 반복하지 마세요.
-- 직전 답변에서 실제로 언급한 내용 중 의미 있는 연결이나 근거가 있다면 reaction으로 짧게 확인하세요. 예: '지원 동기와 경험의 연결이 자연스럽군요.' 단, 근거 없이 칭찬하지 마세요.
-- reaction은 친구의 맞장구가 아니라 면접관의 절제된 존댓말 한 문장이어야 하며, 곧바로 이어질 질문과 내용이 중복되지 않아야 합니다.
-- 실제 대면 면접처럼 '음, 그렇군요.', '네, 그러면', '좋습니다. 다만' 같은 짧은 전환 표현을 문맥에 맞을 때만 사용하세요. 매 문장에 넣거나 같은 표현을 반복하지 말고, 당황한 듯한 '어…' 같은 군더더기는 쓰지 마세요.
-- warm은 부드러운 확인, analytical은 생각한 뒤 확인하는 말, challenging은 반론 전환 표현을 주로 사용하되 성격을 직접 언급하지 마세요.
-- 칭찬·안심 반응은 warm, 사실 확인과 꼬리 질문은 analytical, 빠른 말·시선 불안·답변의 빈틈 지적은 challenging에게 배정하세요.
-- 지원자가 말하지 않은 사실을 만들지 말고, 합격/불합격을 판정하지 마세요.
-- 무응답에는 칭찬이나 '잘 들었습니다' 같은 반응을 절대 쓰지 마세요.
-
-JSON 형식:
-{{"question":"다음 질문", "kind":"base|followup|pressure", "reaction":"짧은 반응 또는 null", "reaction_tone":"warm|neutral|challenging 또는 null", "reaction_speaker":"warm|analytical|challenging 또는 null", "question_speaker":"warm|analytical|challenging"}}"""
+    return f"""실제 채용 면접의 세 면접관 패널로 행동하세요.
+지원: '{cfg.job_role}'.{situation}{topic}{goals} 난이도: {cfg.difficulty}. {pressure}
+답변에 근거한 질문 한 개만 한국어 존댓말로 만드세요. 추상적이면 사례를, 사례면 빠진 STAR 요소를 묻고 반복·허구·합격판정은 금지합니다.
+질문 수가 0이면 지원 분야·상황·주제에 맞는 실제 첫 질문을 question에 반드시 작성하고 reaction=null로 하세요. 이후 reaction은 근거 있는 절제된 한 문장만 쓰며 무응답을 칭찬하지 마세요.
+칭찬은 warm, 사실·꼬리질문은 analytical, 답변 빈틈·빠른 말·불안한 시선 지적은 challenging에게 배정하세요. 짧은 필러는 자연스러울 때만 사용하세요.
+질문 수가 최대면 done=true, question=null, kind="closing", reaction=짧은 마무리 인사입니다. 아니면 done=false입니다.
+응답 스키마에 맞는 JSON 객체 하나만 출력하세요."""
 
 
 def _next_user_prompt(req: InterviewNextRequest) -> str:
     if not req.history:
-        transcript = "(아직 대화 없음 — 첫 질문)"
+        return (
+            f"질문 수: {req.asked_count}/{req.max_questions}. "
+            "첫 질문입니다. 지원자가 이 주제에서 직접 수행한 행동, 판단 근거, 측정 가능한 결과 중 "
+            "하나를 구체적으로 설명하게 만드는 면접 질문을 작성하세요."
+        )
     else:
         lines: list[str] = []
         for index, qa in enumerate(req.history, 1):
@@ -127,6 +138,36 @@ def _next_user_prompt(req: InterviewNextRequest) -> str:
                 lines.append("관찰: " + ", ".join(metrics))
         transcript = "\n".join(lines)
     return f"현재까지 면접:\n{transcript}\n\n질문 수: {req.asked_count}/{req.max_questions}. 다음 질문을 JSON으로 작성하세요."
+
+
+def _local_turn_system_prompt(cfg: InterviewConfig, closing: bool) -> str:
+    context = " / ".join(value for value in (cfg.job_role, cfg.situation, cfg.topic) if value.strip())
+    if closing:
+        return f"당신은 '{context}' 채용 면접관입니다. 면접을 끝내는 절제된 한국어 존댓말 한 문장만 출력하세요."
+    # This prompt runs on a CPU-only local model. Keep it deliberately compact:
+    # prompt evaluation was the dominant latency on low-end interview PCs.
+    return (
+        f"'{context}' 한국 채용 면접관입니다. 존댓말 질문 한 문장만 출력하세요. "
+        "첫 질문은 실제 행동·성과를, 이후에는 직전 답변에서 빠진 근거를 묻습니다. "
+        "설명·JSON·근거 없는 칭찬은 금지합니다."
+    )
+
+
+def _local_dialogue_user_prompt(req: InterviewNextRequest) -> str:
+    if not req.history:
+        return (
+            f"지원 분야: {req.config.job_role}\n"
+            f"면접 상황: {req.config.situation}\n"
+            f"핵심 주제: {req.config.topic}\n"
+            "위 입력을 직접 반영해 지원자의 실제 행동이나 측정 가능한 성과를 확인하는 "
+            "구체적인 첫 질문 한 문장만 하세요."
+        )
+    latest = req.history[-1]
+    return (
+        f"직전 질문: {latest.question}\n"
+        f"지원자 답변: {latest.answer.strip() or '(무응답)'}\n"
+        "이 답변에서 빠진 구체적 근거 한 가지를 골라 확인하는 꼬리 질문 한 문장만 하세요."
+    )
 
 
 def _report_system_prompt(cfg: InterviewConfig) -> str:
@@ -223,7 +264,7 @@ def _nvidia_json(system: str, user: str, schema: type[BaseModel]):
     return schema.model_validate_json(raw[start : end + 1] if start >= 0 and end > start else raw)
 
 
-def _ollama_json(system: str, user: str, schema: type[BaseModel]):
+def _ollama_json(system: str, user: str, schema: type[BaseModel], max_tokens: int = 180):
     from .llm import _ollama_chat
 
     response = _ollama_chat(
@@ -232,13 +273,81 @@ def _ollama_json(system: str, user: str, schema: type[BaseModel]):
             {"role": "user", "content": user + "\n반드시 JSON 객체 하나만 반환하세요. Markdown 금지."},
         ],
         temperature=0.35,
-        max_tokens=1400,
+        max_tokens=max_tokens,
+        response_schema=schema.model_json_schema(),
     )
     raw = (response.choices[0].message.content or "").strip()
     if raw.startswith("```"):
         raw = raw.split("```", 2)[1].removeprefix("json").strip()
     start, end = raw.find("{"), raw.rfind("}")
     return schema.model_validate_json(raw[start : end + 1] if start >= 0 and end > start else raw)
+
+
+def _ollama_text(system: str, user: str, max_tokens: int = 100) -> str:
+    """Use plain generation for live dialogue.
+
+    Small local models are both faster and materially less likely to echo schema
+    descriptions when they only have to author the sentence the actor will say.
+    """
+    from .llm import _ollama_chat
+
+    response = _ollama_chat(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        temperature=0.35,
+        max_tokens=max_tokens,
+        json_mode=False,
+    )
+    text = (response.choices[0].message.content or "").strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1].strip()
+    text = text.strip()
+    if text.startswith("{") and text.endswith("}"):
+        try:
+            payload = json.loads(text)
+            for key in ("question", "질문", "closing", "마무리"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    text = value
+                    break
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    if text.startswith("{"):
+        match = re.search(r'["\']?(?:질문|question|마무리|closing)["\']?\s*:\s*["\']([^"\']+)', text, re.IGNORECASE)
+        if match:
+            text = match.group(1)
+    text = text.strip().strip('"').strip("'").strip()
+    for prefix in ("질문:", "반응:", "마무리:", "closing:", "question:"):
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix):].strip()
+    return " ".join(text.split())
+
+
+def _route_local_interviewer(req: InterviewNextRequest, question: str) -> str:
+    """Route generated wording to the matching scene role without authoring dialogue.
+
+    warm=HR, analytical=technical, challenging=executive/pressure. The question
+    itself always comes from the LLM; this only selects which authored actor says it.
+    """
+    configured_context = f"{req.config.job_role} {req.config.topic}".lower()
+    generated_question = question.lower()
+    if req.config.difficulty == "어려움" and req.history:
+        return "challenging"
+    technical = (
+        "기술", "개발", "구현", "설계", "성능", "장애", "데이터", "서버", "백엔드",
+        "프론트", "알고리즘", "프로젝트", "코드", "api", "db", "ai", "모델",
+    )
+    hr = ("지원 동기", "협업", "갈등", "조직", "성격", "가치관", "강점", "약점", "입사")
+    # The user's configured interview purpose outranks incidental vocabulary in
+    # the generated sentence (for example an HR question mentioning a project).
+    if any(keyword in configured_context for keyword in hr):
+        return "warm"
+    if any(keyword in configured_context for keyword in technical):
+        return "analytical"
+    if any(keyword in generated_question for keyword in hr):
+        return "warm"
+    if any(keyword in generated_question for keyword in technical):
+        return "analytical"
+    return "analytical" if req.history else "warm"
 
 
 def _route_json(system: str, user: str, schema: type[BaseModel]):
@@ -252,118 +361,77 @@ def _route_json(system: str, user: str, schema: type[BaseModel]):
     return _gemini_json(system, user, schema)
 
 
-_MOCK_FOLLOWUPS = (
-    ('방금 "{snippet}"라고 하셨는데, 그 내용을 보여주는 구체적인 사례를 말씀해 주시겠습니까?', "followup"),
-    ("그 상황에서 본인이 맡은 역할과 실제로 취한 행동은 무엇이었습니까?", "followup"),
-    ("같은 결정을 다시 내려야 한다면 무엇을 다르게 하시겠습니까?", "pressure"),
-    ("본인의 강점이 이 직무에서 성과로 이어진 사례를 설명해 주십시오.", "base"),
-    ("입사 후 이루고 싶은 가장 구체적인 목표는 무엇입니까?", "base"),
-)
-
-
-def fallback_next_question(req: InterviewNextRequest) -> InterviewNextResponse:
-    """Deterministic, answer-aware continuation used by mock mode and provider outages."""
-    if not req.history:
-        return InterviewNextResponse(
-            question=f"{req.config.job_role} 직무에 지원하신 이유와 {req.config.topic}에 대해 말씀해 주시겠습니까?",
-            kind="base",
+def generate_next_question(req: InterviewNextRequest) -> InterviewNextResponse:
+    if _provider() in ("ollama", "local"):
+        if req.asked_count >= req.max_questions:
+            closing = _ollama_text(
+                _local_turn_system_prompt(req.config, True),
+                _next_user_prompt(req).replace("다음 질문을 JSON으로 작성하세요.", "면접 종료 인사를 한 문장으로 작성하세요."),
+                max_tokens=80,
+            )
+            if not closing:
+                raise ValueError("local LLM returned an empty closing line")
+            return InterviewNextResponse(
+                question=None,
+                kind="closing",
+                done=True,
+                reaction=closing,
+                reaction_tone="warm",
+                reaction_speaker="warm",
+                question_speaker="warm",
+            )
+        first = not req.history
+        dialogue_prompt = _local_turn_system_prompt(req.config, False)
+        question = _ollama_text(
+            dialogue_prompt,
+            _local_dialogue_user_prompt(req),
+            max_tokens=64,
+        )
+        if not question or question.startswith("{"):
+            raise ValueError("local LLM returned an empty interview question")
+        speaker = _route_local_interviewer(req, question)
+        result = InterviewNextResponse(
+            question=question,
+            kind="base" if first else ("pressure" if speaker == "challenging" else "followup"),
+            done=False,
             reaction=None,
             reaction_tone=None,
             reaction_speaker=None,
-            question_speaker="warm",
+            question_speaker=speaker,
         )
-    index = max(0, min(req.asked_count - 1, len(_MOCK_FOLLOWUPS) - 1))
-    template, kind = _MOCK_FOLLOWUPS[index]
-    last_qa = req.history[-1] if req.history else QAExchange(question="", answer="")
-    last = last_qa.answer.strip()
-    snippet = (last[:16] + "…") if len(last) > 16 else (last or "말씀하신 내용")
-    reaction, tone, speaker = "음, 말씀하신 내용은 확인했습니다.", "neutral", "analytical"
-    if not last:
-        reaction, tone, speaker = "답변이 들리지 않았습니다. 짧게라도 말씀해 주세요.", "neutral", "analytical"
-    elif (last_qa.wpm or 0) > 170 or last_qa.filler_count >= 4:
-        reaction, tone, speaker = "다만, 조금 더 천천히 핵심부터 말씀해 주세요.", "challenging", "challenging"
-    elif (last_qa.gaze_ratio is not None and last_qa.gaze_ratio < 0.55) or last_qa.gaze_switches >= 7:
-        reaction, tone, speaker = "음, 질문자를 보면서 답변을 이어가 주세요.", "challenging", "challenging"
-    elif last and len(last) < 20:
-        reaction, tone, speaker = "네, 그러면 조금 더 구체적으로 설명해 주시겠습니까?", "neutral", "analytical"
-    question_speaker = "challenging" if kind == "pressure" else ("analytical" if kind == "followup" else "warm")
-    return InterviewNextResponse(
-        question=template.format(snippet=snippet),
-        kind=kind,
-        reaction=reaction,
-        reaction_tone=tone,
-        reaction_speaker=speaker,
-        question_speaker=question_speaker,
-    )
-
-
-def fallback_interview_report(req: InterviewReportRequest) -> InterviewReportResponse:
-    answered = [qa for qa in req.history if qa.answer.strip()]
-    if not answered:
-        return InterviewReportResponse(
-            overall_summary=(
-                "이번 연습에서는 평가할 수 있는 음성 답변이 기록되지 않았습니다. "
-                "면접 진행 기록은 정상 보존되었으며, 다음 연습에서는 질문마다 짧게라도 실제 답변을 남겨 주세요."
-            ),
-            strengths=[],
-            improvements=[
-                "질문마다 결론부터 한두 문장으로 답변 시작",
-                "질문당 최소 30초 이상 구체적인 사례와 본인의 행동 설명",
-            ],
-            per_question=[
-                PerQuestionEval(
-                    question=qa.question,
-                    comment="답변이 기록되지 않아 내용 및 STAR 평가는 보류합니다.",
-                    star=False,
-                )
-                for qa in req.history
-            ],
-        )
-
-    per_question = [
-        PerQuestionEval(
-            question=qa.question,
-            comment=(
-                "답변의 결론과 근거를 더 분명히 연결하면 설득력이 높아집니다."
-                if qa.answer.strip()
-                else "답변이 기록되지 않아 내용 및 STAR 평가는 보류합니다."
-            ),
-            star=len(qa.answer.strip()) > 40,
-        )
-        for qa in req.history
-    ]
-    return InterviewReportResponse(
-        overall_summary="질문에 성실하게 답했습니다. 구체적인 사례와 STAR 구조를 보강하면 답변이 더 선명해집니다.",
-        strengths=["질문의 의도를 따라가려는 태도", "차분한 면접 진행"],
-        improvements=["수치와 역할 등 구체적인 근거 추가", "결론을 먼저 말한 뒤 사례로 뒷받침"],
-        per_question=per_question,
-    )
-
-
-def generate_next_question(req: InterviewNextRequest) -> InterviewNextResponse:
-    if req.asked_count >= req.max_questions:
-        return InterviewNextResponse(question=None, kind="closing", done=True)
-    if _provider() == "mock":
-        return fallback_next_question(req)
-    result: InterviewNextResponse = _route_json(_next_system_prompt(req.config), _next_user_prompt(req), InterviewNextResponse)
+    else:
+        result = _route_json(_next_system_prompt(req.config), _next_user_prompt(req), InterviewNextResponse)
+    if result.reaction and result.reaction.strip().lower() == "null":
+        result.reaction = None
+    if not req.history:
+        result.reaction = None
+        result.reaction_tone = None
+        result.reaction_speaker = None
+    should_close = req.asked_count >= req.max_questions
+    if should_close:
+        result.done = True
+        result.kind = "closing"
+        result.question = None
+        if not result.reaction or not result.reaction.strip():
+            raise ValueError("local LLM returned an empty closing line")
+        return result
     result.done = False
-    if not result.question or not result.question.strip():
-        return InterviewNextResponse(question=None, kind="closing", done=True)
+    if not result.question or not result.question.strip() or result.question.strip() == "다음 질문 또는 null":
+        raise ValueError("local LLM returned an empty interview question")
     result.question = result.question.strip()
     if result.kind not in ("base", "followup", "pressure"):
         result.kind = "followup"
     if result.kind == "pressure":
         result.question_speaker = "challenging"
-    elif result.kind == "followup" and result.question_speaker == "warm":
-        result.question_speaker = "analytical"
     return result
 
 
 def generate_interview_report(req: InterviewReportRequest) -> InterviewReportResponse:
-    # Do not spend an LLM request (or fail on provider quota) when there is no
-    # answer content to assess. This is still a valid, displayable report.
-    if not any(qa.answer.strip() for qa in req.history):
-        return fallback_interview_report(req)
-    if _provider() == "mock":
-        return fallback_interview_report(req)
+    if _provider() in ("ollama", "local"):
+        return _ollama_json(
+            _report_system_prompt(req.config),
+            _report_user_prompt(req),
+            InterviewReportResponse,
+            max_tokens=600,
+        )
     return _route_json(_report_system_prompt(req.config), _report_user_prompt(req), InterviewReportResponse)

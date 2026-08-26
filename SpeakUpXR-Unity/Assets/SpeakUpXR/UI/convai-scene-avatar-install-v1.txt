@@ -1,17 +1,18 @@
 Convai face-rigged scene avatar installation
-Generated: 2026-08-21 20:42:16
+Generated: 2026-08-26 17:10:57
 SceneAuthored: YES (no runtime character spawning)
 LegacyFormalCharacters: PRESERVED + INACTIVE
 Speech: Convai Narrative Speech / Korean dashboard voices
 Face: server visemes + Convai emotion blendshape stream
-CurrentLocalFaceModelInventory: Sofia only (three independent instances)
+CurrentLocalFaceModelInventory: official Convai CC4 female + official Convai CC4 male x2
+MaleVariant: Park Seongho uses an independently authored navy clothing material set
 SampleDriversNormalized: YES (Convai body graph + free conversation flow disabled)
-ValidationRevision: 6
-[1] 인사 면접관: Kim Minseo / 00b8c5b0-9d36-11f1-9de0-42010a7be02f / Avatar=Convai_Kim_Minseo_FACE_RIG_ACTIVE / BlendShapes=948 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
-    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / LocalFacialFallback=READY
-[2] 기술 면접관: Lee Junho / 116d164a-9d36-11f1-9a53-42010a7be02f / Avatar=Convai_Lee_Junho_FACE_RIG_ACTIVE / BlendShapes=948 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
-    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / LocalFacialFallback=READY
-[3] 임원 면접관: Park Seongho / 1e9178a2-9d36-11f1-907a-42010a7be02f / Avatar=Convai_Park_Seongho_FACE_RIG_ACTIVE / BlendShapes=948 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
-    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / LocalFacialFallback=READY
+ValidationRevision: 9
+[1] 인사 면접관: Kim Minseo / e41f5270-7378-478f-b037-391f0be4a269 / Avatar=Kim_Minseo_BUSINESS_VISUAL / BlendShapes=606 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
+    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / TimestampedServerVisemes=BOUND / LocalExpressions=BOUND
+[2] 기술 면접관: Lee Junho / 07463148-4a9b-42e6-823b-a4eb0950ae65 / Avatar=Lee_Junho_BUSINESS_VISUAL / BlendShapes=889 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
+    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / TimestampedServerVisemes=BOUND / LocalExpressions=BOUND
+[3] 임원 면접관: Park Seongho / e25f1f92-4c46-4360-b975-889b0de98e18 / Avatar=Park_Seongho_BUSINESS_VISUAL / BlendShapes=889 / LipSync=1 / Emotion=1 / Gaze=2 / SeatedAnimator=BOUND
+    MissingScripts=0 / EnabledConflictingSampleDrivers=0 / TimestampedServerVisemes=BOUND / LocalExpressions=BOUND
 RuntimeManagersActive: 1; TotalFound=2; RoomManagersActive=1; OwnedCharacters=3; DefaultTarget=Kim Minseo
 AudioListenersActive: 1; TotalFound=3

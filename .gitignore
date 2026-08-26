@@ -48,6 +48,11 @@ SpeakUpXR-Unity/Assets/Enviroment/
 SpeakUpXR-Unity/Assets/Enviroment.meta
 SpeakUpXR-Unity/Assets/FORMAL_AVATAR/
 SpeakUpXR-Unity/Assets/FORMAL_AVATAR.meta
+# Additional Asset Store packages are local dependencies, not redistributable source.
+SpeakUpXR-Unity/Assets/Stylized3DMonster/
+SpeakUpXR-Unity/Assets/Stylized3DMonster.meta
+SpeakUpXR-Unity/Assets/TextMesh Pro/
+SpeakUpXR-Unity/Assets/TextMesh Pro.meta
 # Convai Asset Store package is installed locally for integration testing only.
 SpeakUpXR-Unity/Assets/Convai SDK For Unity/
 SpeakUpXR-Unity/Assets/Convai SDK For Unity.meta

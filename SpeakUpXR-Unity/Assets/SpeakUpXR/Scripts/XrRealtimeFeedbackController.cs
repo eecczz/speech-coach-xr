@@ -12,6 +12,7 @@ namespace SpeakUpXR
         public CoachApi Api;
         public InterviewerPanel Panel;
         public InterviewHud Hud;
+        public FeedbackCompanionController Companion;
 
         private readonly Queue<CandidateFeedbackSignal> _pending = new();
         private readonly Queue<string> _recentMessages = new();
@@ -62,17 +63,9 @@ namespace SpeakUpXR
                 if (Api) yield return Api.AgentFeedback(request, value => response = value, _ => { });
                 if (response != null && !string.IsNullOrWhiteSpace(response.message) && Session.State == SessionState.Listening)
                 {
-                    string speakerId = response.tone == "critique" ? "challenging" : signal.SpeakerId;
-                    var speaker = Panel ? Panel.Find(speakerId, "followup") : null;
-                    Hud?.SetSpeaker(speaker ? speaker.DisplayName : "면접관");
-                    Hud?.SetQuestion(response.message);
-                    Hud?.SetStatus("실시간 면접 피드백", HudTone.Think);
-                    if (Panel) yield return Panel.SpeakLine(Api, response.message, speakerId, "followup",
-                        response.tone == "critique" ? "challenging" : "neutral");
+                    if (Companion) yield return Companion.SpeakFeedback(response.message, response.tone);
                     _recentMessages.Enqueue(response.message);
                     while (_recentMessages.Count > 4) _recentMessages.Dequeue();
-                    Hud?.SetQuestion(Session.CurrentQuestion);
-                    Hud?.SetStatus("답변 중 · 끝나면 트리거를 눌러 주세요", HudTone.Listen);
                 }
             }
             _busy = false;
@@ -115,12 +108,7 @@ namespace SpeakUpXR
             AgentFeedbackResponse response = null;
             if (Api) yield return Api.AgentFeedback(request, value => response = value, _ => { });
             if (response == null || string.IsNullOrWhiteSpace(response.message)) yield break;
-            var speaker = Panel ? Panel.Find(signal.SpeakerId, "followup") : null;
-            Hud?.SetSpeaker(speaker ? speaker.DisplayName : "면접관");
-            Hud?.SetQuestion(response.message);
-            Hud?.SetStatus("답변 전달 피드백", HudTone.Think);
-            if (Panel) yield return Panel.SpeakLine(Api, response.message, signal.SpeakerId, "followup",
-                response.tone == "critique" ? "challenging" : "neutral");
+            if (Companion) yield return Companion.SpeakFeedback(response.message, response.tone);
             _recentMessages.Enqueue(response.message);
             while (_recentMessages.Count > 4) _recentMessages.Dequeue();
         }

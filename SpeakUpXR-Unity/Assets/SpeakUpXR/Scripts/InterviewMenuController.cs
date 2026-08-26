@@ -69,7 +69,7 @@ namespace SpeakUpXR
             if (!ProviderStatusText) yield break;
             if (health == null)
             {
-                ProviderStatusText.text = "AI 서버 연결 안 됨 · 시작 시 기본 질문만 사용됩니다";
+                ProviderStatusText.text = "AI 서버 연결 안 됨 · 로컬 AI가 준비될 때까지 면접 시작이 대기합니다";
                 ProviderStatusText.color = new Color(0.72f, 0.24f, 0.24f);
             }
             else if (health.provider == "mock")
@@ -111,9 +111,9 @@ namespace SpeakUpXR
             InterviewLaunchSettings.SaveForLaunch(new InterviewLaunchData
             {
                 ProjectName = Value(ProjectInput, "면접 준비"),
-                JobRole = Value(JobRoleInput, "신입 공통 인성"),
-                Situation = Value(SituationInput, "실무 및 인성 종합 면접"),
-                Topic = Value(TopicInput, "지원 동기와 직무 경험"),
+                JobRole = JobRoleInput.text.Trim(),
+                Situation = SituationInput.text.Trim(),
+                Topic = TopicInput.text.Trim(),
                 Difficulty = DifficultyDropdown ? DifficultyDropdown.options[DifficultyDropdown.value].text : "보통",
                 MaxQuestions = count,
                 FocusGoals = goals.ToArray(),

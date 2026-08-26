@@ -174,7 +174,7 @@ namespace SpeakUpXR
         public string BaseUrl = "http://127.0.0.1:8002";
         [Tooltip("audio-pipeline service, e.g. http://192.168.0.10:8000")]
         public string AudioBaseUrl = "http://127.0.0.1:8000";
-        [Min(5)] public int TimeoutSeconds = 35;
+        [Min(5)] public int TimeoutSeconds = 180;
 
         public IEnumerator NextQuestion(InterviewNextRequest req, Action<InterviewNextResponse> ok, Action<string> error) =>
             PostJson("/interview/next", JsonUtility.ToJson(req), json => ok?.Invoke(JsonUtility.FromJson<InterviewNextResponse>(json)), error);

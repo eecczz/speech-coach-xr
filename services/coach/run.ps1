@@ -40,6 +40,29 @@ function Find-Python {
     throw "Python 3을 찾지 못했습니다. Python 3.10 이상을 설치한 뒤 다시 실행하세요."
 }
 
+function Test-LocalPort([int]$TargetPort) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $connection = $client.BeginConnect("127.0.0.1", $TargetPort, $null, $null)
+        return $connection.AsyncWaitHandle.WaitOne(250) -and $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
+function Find-Ollama {
+    $command = Get-Command ollama -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+
+    $localPrograms = [Environment]::GetFolderPath("LocalApplicationData")
+    $installed = Join-Path $localPrograms "Programs\Ollama\ollama.exe"
+    if (Test-Path -LiteralPath $installed) { return $installed }
+
+    throw "Ollama를 찾지 못했습니다. Ollama를 설치한 뒤 다시 실행하세요."
+}
+
 if (-not (Test-Path -LiteralPath $venvPython)) {
     $python = @(Find-Python)
     Write-Host "[SpeakUpXR] 로컬 서버 환경을 처음 한 번 준비합니다."
@@ -57,17 +80,42 @@ if ($Provider -eq "auto") {
     $configuredProvider = [string]$env:LLM_PROVIDER
     $configuredProvider = $configuredProvider.Trim().ToLowerInvariant()
     if ($configuredProvider -in @("ollama", "local")) { $Provider = "ollama" }
-    elseif ($configuredProvider -eq "gemini" -and $env:GOOGLE_API_KEY) { $Provider = "gemini" }
-    elseif ($configuredProvider -eq "nvidia" -and $env:NVIDIA_API_KEY) { $Provider = "nvidia" }
-    elseif ($configuredProvider -eq "jeonbuk" -and $env:JEONBUK_API_KEY) { $Provider = "jeonbuk" }
-    elseif ($configuredProvider -eq "claude" -and $env:ANTHROPIC_API_KEY) { $Provider = "claude" }
-    elseif ($configuredProvider -eq "mock") { $Provider = "mock" }
     elseif (-not $configuredProvider) { $Provider = "ollama" }
-    elseif (-not $configuredProvider -and $env:NVIDIA_API_KEY) { $Provider = "nvidia" }
-    elseif (-not $configuredProvider -and $env:JEONBUK_API_KEY) { $Provider = "jeonbuk" }
-    else { $Provider = "mock" }
+    else { throw "무료 무제한 실행은 LLM_PROVIDER=ollama만 지원합니다. 현재 값: $configuredProvider" }
+}
+if ($Provider -notin @("ollama", "local")) {
+    throw "이 실행기는 로컬 Ollama 전용입니다. -Provider ollama로 실행하세요."
 }
 $env:LLM_PROVIDER = $Provider
 $env:PYTHONPATH = $repo
+
+$ollama = Find-Ollama
+if (-not (Test-LocalPort 11434)) {
+    Write-Host "[SpeakUpXR] Ollama 추론 엔진을 시작합니다: http://127.0.0.1:11434"
+    Start-Process -FilePath $ollama -ArgumentList "serve" -WindowStyle Hidden
+    $ollamaReady = $false
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        Start-Sleep -Milliseconds 250
+        if (Test-LocalPort 11434) {
+            $ollamaReady = $true
+            break
+        }
+    }
+    if (-not $ollamaReady) { throw "Ollama가 제한 시간 안에 시작되지 않았습니다." }
+}
+
+$model = if ($env:OLLAMA_CHAT_MODEL) { $env:OLLAMA_CHAT_MODEL } else { "qwen2.5:1.5b" }
+$installedModels = (& $ollama list 2>$null | Out-String)
+if ($installedModels -notmatch "(?m)^$([Regex]::Escape($model))\s") {
+    Write-Host "[SpeakUpXR] 최초 실행용 로컬 모델을 준비합니다: $model"
+    & $ollama pull $model
+    if ($LASTEXITCODE -ne 0) { throw "Ollama 모델 다운로드 실패: $model" }
+}
+
+if (Test-LocalPort $Port) {
+    Write-Host "[SpeakUpXR] 기존 coach/TTS 서버를 재사용합니다: http://127.0.0.1:$Port"
+    exit 0
+}
+
 Write-Host "[SpeakUpXR] coach/TTS 서버 실행: http://127.0.0.1:$Port (LLM_PROVIDER=$Provider)"
 & $venvPython -m uvicorn services.coach.app.main:app --host 127.0.0.1 --port $Port

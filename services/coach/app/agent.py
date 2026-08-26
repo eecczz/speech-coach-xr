@@ -373,49 +373,76 @@ def _generate_with_nvidia(req: AgentTriggerRequest) -> AgentFeedbackResponse:
 def _generate_with_ollama(req: AgentTriggerRequest) -> AgentFeedbackResponse:
     from .llm import _ollama_chat
 
-    json_contract = (
-        '\n\n반드시 다음 JSON 형식으로만 응답하세요. Markdown 금지:\n'
-        '{"message": "한 줄 코칭 한국어 텍스트 또는 null", '
-        '"tone": "praise" | "nudge" | "critique" | null}'
+    negative_signal = req.kind in {
+        "silence", "gaze", "smile_absence", "motion_absence", "filler",
+        "speech_rate", "posture", "gesture", "vocal_tone",
+    }
+    tone_rule = (
+        "측정 이상 신호이므로 칭찬하지 말고 tone은 nudge 또는 critique로 하세요."
+        if negative_signal
+        else "근거가 약하면 message와 tone을 null로 하세요."
+    )
+    compact_system = (
+        "당신은 VR 면접 화면 왼쪽 위의 실시간 피드백 캐릭터입니다. "
+        "측정값에 근거해 지원자에게 한국어 존댓말 한 문장, 35자 이내로만 조언합니다. "
+        "관찰하지 않은 사실과 무응답 칭찬은 금지합니다. " + tone_rule
+    )
+    compact_user = (
+        f"상황: {req.situation or req.scenario}\n"
+        f"감지 신호: {req.kind}\n"
+        f"관찰: {_trigger_brief(req)}\n"
+        f"추가 측정: {_format_context(req.context)}\n"
+        f"행동 지시: {_trigger_directive(req.kind)}\n"
+        "관찰된 문제와 바로 고칠 행동만 직접 말하세요."
     )
     response = _ollama_chat(
         [
-            {"role": "system", "content": _system_prompt(req)},
-            {"role": "user", "content": _user_prompt(req) + json_contract},
+            {"role": "system", "content": compact_system},
+            {"role": "user", "content": compact_user + "\n조언 문장만 출력하세요. JSON과 설명은 금지합니다."},
         ],
-        temperature=0.5,
-        max_tokens=220,
+        temperature=0.25,
+        max_tokens=40,
+        json_mode=False,
+        model=os.environ.get("OLLAMA_FEEDBACK_MODEL", "qwen2.5:1.5b"),
     )
     raw = (response.choices[0].message.content or "").strip()
-    start, end = raw.find("{"), raw.rfind("}")
-    return AgentFeedbackResponse.model_validate_json(raw[start : end + 1] if start >= 0 and end > start else raw)
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1].strip()
+    if raw.lower().startswith("json"):
+        raw = raw[4:].strip()
+    raw = raw.strip().strip('"').strip()
+    if raw.startswith("{"):
+        import re
+        values = [value.strip() for value in re.findall(r':\s*"([^"]+)', raw)]
+        useful_values = [value for value in values if value.lower() not in {req.kind, "nudge", "critique", "praise"}]
+        if useful_values:
+            raw = max(useful_values, key=len)
+        else:
+            return AgentFeedbackResponse(message=None, tone=None)
+    if raw.lower() in {"", "null", "none"}:
+        return AgentFeedbackResponse(message=None, tone=None)
+    return AgentFeedbackResponse(message=raw, tone="nudge" if negative_signal else "praise")
 
 
 def generate_agent_feedback(req: AgentTriggerRequest) -> AgentFeedbackResponse:
     """Provider-routed agent feedback. Caller wraps in try/except."""
     provider = os.environ.get("LLM_PROVIDER", "ollama").lower().strip()
-    if provider == "mock":
-        messages = {
-            "silence": ("잠시 생각을 정리한 뒤 이어서 말씀해 주세요.", "nudge"),
-            "gaze": ("질문자를 보면서 답변해 주세요.", "critique"),
-            "posture": ("고개와 상체를 조금 더 안정시켜 주세요.", "nudge"),
-            "gesture": ("손동작을 조금만 차분하게 해 주세요.", "nudge"),
-            "motion_absence": ("필요한 부분에서는 자연스러운 손짓을 곁들여 주세요.", "nudge"),
-            "speech_rate": ("조금 더 천천히 핵심부터 말씀해 주세요.", "critique"),
-            "filler": ("짧게 호흡하고 문장을 이어가 주세요.", "nudge"),
-            "vocal_tone": ("핵심어에 억양을 주고 말끝을 분명히 해 주세요.", "nudge"),
-        }
-        message, tone = messages.get(req.kind, (None, None))
-        return AgentFeedbackResponse(message=message, tone=tone)
     if provider == "jeonbuk":
         result = _generate_with_jeonbuk(req)
     elif provider in ("nvidia", "qwen"):
         result = _generate_with_nvidia(req)
     elif provider in ("ollama", "local"):
         result = _generate_with_ollama(req)
-    else:
+    elif provider == "gemini":
         result = _generate_with_gemini(req)
+    else:
+        raise RuntimeError(f"unsupported LLM_PROVIDER for agent feedback: {provider!r}")
     # Trim — models occasionally return "  하세요. " with trailing whitespace.
     if result.message is not None:
         result.message = result.message.strip() or None
+        if result.message and len(result.message) > 35:
+            boundary = max(result.message.rfind(mark, 0, 36) for mark in (".", "!", "?", "。", "！", "？"))
+            result.message = result.message[: boundary + 1] if boundary >= 12 else result.message[:34].rstrip() + "…"
+    if result.message and req.kind != "content" and result.tone == "praise":
+        result.tone = "nudge"
     return result

@@ -57,33 +57,6 @@ namespace SpeakUpXR
             return true;
         }
 
-        /// <summary>
-        /// Allows Interview.unity to be played directly from the Editor. Reuse the
-        /// last menu selection when one exists; otherwise use a neutral, non-job-
-        /// specific practice setup instead of redirecting away from the scene.
-        /// </summary>
-        public static void ApplyDirectSceneDefaults(InterviewSession session)
-        {
-            if (!session) return;
-            InterviewLaunchData value = HasSaved ? LoadSaved() : new InterviewLaunchData
-            {
-                ProjectName = "면접 연습",
-                JobRole = "지원 직무",
-                Situation = "실무 면접",
-                Topic = "지원자의 경험과 직무 적합성",
-                Difficulty = "보통",
-                MaxQuestions = 5,
-                FocusGoals = new[] { "답변 구조", "시선 처리", "자신감" },
-            };
-            // Playing Interview.unity directly is an editor/test convenience, not a
-            // second launch from the menu. Keep the saved topic, but do not let a
-            // previously selected one-question smoke test make every later Play run
-            // finish immediately after the motivation question.
-            value.MaxQuestions = Mathf.Clamp(Mathf.Max(5, value.MaxQuestions), 5, 12);
-            Current = value;
-            Apply(session, value);
-        }
-
         private static void Apply(InterviewSession session, InterviewLaunchData value)
         {
             session.Config.project_name = value.ProjectName;

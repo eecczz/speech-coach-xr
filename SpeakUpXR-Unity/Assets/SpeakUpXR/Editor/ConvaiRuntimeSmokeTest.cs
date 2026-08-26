@@ -30,7 +30,8 @@ namespace SpeakUpXR.Editor
                 EditorApplication.update += Tick;
                 return;
             }
-            EditorApplication.delayCall += StartIfNeeded;
+            // Runtime smoke tests are explicit menu actions only. Never replace the
+            // user's active scene or start Play Mode automatically during normal work.
         }
 
         [MenuItem("SpeakUpXR/Convai/한국어 음성·Viseme 런타임 시험")]

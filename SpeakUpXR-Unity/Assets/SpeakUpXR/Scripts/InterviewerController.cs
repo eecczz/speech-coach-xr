@@ -38,7 +38,7 @@ namespace SpeakUpXR
         [Tooltip("Optional mouth transform for non-VRM placeholder characters")]
         public Transform PlaceholderMouth;
         public AudioSource VoiceSource;
-        [Tooltip("Optional Convai exact-speech bridge. When the locally installed Convai package is ready, its Korean voice is used before the existing TTS fallback.")]
+        [Tooltip("Convai exact-speech bridge. Convai audio and server visemes are the single speech path.")]
         public ConvaiInterviewerBridge ConvaiBridge;
 
         [Header("TTS / gesture synchronization — editable during Play Mode")]
@@ -154,34 +154,33 @@ namespace SpeakUpXR
                 }
             }
 
+            // Convai can be temporarily unavailable while its room reconnects. The
+            // interview must still speak and lip-sync: local TTS drives the same CC4
+            // viseme targets through ConvaiFacialSpeechFallback.
             AudioClip clip = null;
-            string error = null;
-            if (api) yield return api.Synthesize(text, Voice, tone, value => clip = value, value => error = value);
-            float gestureStart = Time.realtimeSinceStartup + SpeakingGesture.StartDelaySeconds;
-            while (Time.realtimeSinceStartup < gestureStart) yield return null;
+            string ttsError = null;
+            if (api) yield return api.Synthesize(text, Voice, tone, value => clip = value, value => ttsError = value);
             SetSpeaking(true);
             PlaySpeakingGesture();
-
-            float audioStart = Time.realtimeSinceStartup + AudioStartDelaySeconds;
-            while (Time.realtimeSinceStartup < audioStart) yield return null;
             if (clip && VoiceSource)
             {
                 VoiceSource.clip = clip;
                 VoiceSource.Play();
                 while (VoiceSource.isPlaying) yield return null;
+                VoiceSource.clip = null;
+                Destroy(clip);
             }
             else
             {
-                if (!string.IsNullOrEmpty(error)) Debug.LogWarning($"[{DisplayName}] {error}; subtitle timing fallback");
-                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.3f + text.Length * 0.055f, 1.8f, 12f);
+                // Preserve visible articulation even if both remote and local audio
+                // fail, so on-screen dialogue never has a frozen face.
+                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.2f + text.Length * 0.07f, 1.8f, 12f);
                 while (Time.realtimeSinceStartup < end) yield return null;
             }
-            float tailEnd = Time.realtimeSinceStartup + GestureTailSeconds;
-            while (Time.realtimeSinceStartup < tailEnd) yield return null;
             SetSpeaking(false);
+            if (!string.IsNullOrWhiteSpace(ttsError))
+                Debug.LogWarning($"[{DisplayName}] local TTS fallback: {ttsError}; Convai={ConvaiBridge?.Diagnostic}");
             _facialFallback?.ClearDialogueExpression();
-            if (_animator) _animator.speed = 1f;
-            if (VoiceSource) VoiceSource.clip = null;
         }
 
         public void StopSpeaking()

@@ -2867,7 +2867,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   BaseUrl: http://127.0.0.1:8002
   AudioBaseUrl: http://127.0.0.1:8000
-  TimeoutSeconds: 35
+  TimeoutSeconds: 180
 --- !u!4 &782303868
 Transform:
   m_ObjectHideFlags: 0

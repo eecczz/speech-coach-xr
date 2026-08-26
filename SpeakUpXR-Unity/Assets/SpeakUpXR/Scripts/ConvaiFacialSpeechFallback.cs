@@ -10,7 +10,7 @@ namespace SpeakUpXR
     /// Server visemes always win whenever the Convai lip-sync component is actively
     /// changing the mapped facial blendshapes.
     /// </summary>
-    [DefaultExecutionOrder(10000)]
+    [DefaultExecutionOrder(20000)]
     [DisallowMultipleComponent]
     public sealed class ConvaiFacialSpeechFallback : MonoBehaviour
     {
@@ -162,7 +162,16 @@ namespace SpeakUpXR
                 Time.unscaledDeltaTime * (speaking ? 3.5f : 5f));
             // Convai's native EmotionController owns the remote face. The local
             // expression layer is reserved for Coach-TTS/offline fallback turns.
-            if (!remoteFace) ApplyExpression(_expressionWeight);
+            ApplyExpression(_expressionWeight);
+            // A Convai interview turn has exactly one facial clock: the timestamped
+            // server viseme stream locked to ConvaiAudioOutput. Never mix in the old
+            // amplitude/sine-wave driver while a remote request is pending or playing.
+            if (Owner.ConvaiBridge && Owner.ConvaiBridge.UseConvaiSpeech &&
+                (Owner.ConvaiBridge.IsSpeechPending || remoteFace))
+            {
+                _localDriving = false;
+                return;
+            }
             if (!speaking)
             {
                 _envelope = Mathf.MoveTowards(_envelope, 0f, Time.unscaledDeltaTime * 8f);

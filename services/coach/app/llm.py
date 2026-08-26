@@ -631,7 +631,7 @@ def generate_with_nvidia(bundle: SessionBundle) -> ComprehensiveReport:
 
 _ollama_client = None
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
-OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "qwen3.5:4b")
+OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "qwen2.5:1.5b")
 
 
 def _get_ollama():
@@ -639,7 +639,12 @@ def _get_ollama():
     if _ollama_client is None:
         from openai import OpenAI
 
-        _ollama_client = OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama", timeout=120.0)
+        _ollama_client = OpenAI(
+            base_url=OLLAMA_BASE_URL,
+            api_key="ollama",
+            timeout=120.0,
+            max_retries=0,
+        )
     return _ollama_client
 
 
@@ -648,15 +653,30 @@ def _ollama_chat(
     *,
     temperature: float = 0.2,
     max_tokens: int = 4000,
+    response_schema: dict | None = None,
+    json_mode: bool = True,
+    model: str | None = None,
 ):
     """Run the interview brain locally with no request quota or API key."""
     return _get_ollama().chat.completions.create(
-        model=OLLAMA_CHAT_MODEL,
+        model=model or OLLAMA_CHAT_MODEL,
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
         top_p=0.9,
-        response_format={"type": "json_object"},
+        response_format=(
+            {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_response",
+                    "strict": True,
+                    "schema": response_schema,
+                },
+            }
+            if response_schema
+            else ({"type": "json_object"} if json_mode else None)
+        ),
+        extra_body={"think": False},
     )
 
 
@@ -668,6 +688,7 @@ def generate_with_ollama(bundle: SessionBundle) -> ComprehensiveReport:
         ],
         temperature=0.0,
         max_tokens=6000,
+        response_schema=ComprehensiveReport.model_json_schema(),
     )
     content = response.choices[0].message.content or ""
     parsed = _parse_report_text(content)
@@ -791,8 +812,6 @@ def generate(bundle: SessionBundle) -> ComprehensiveReport:
 
 
 def provider_info() -> dict:
-    if PROVIDER == "mock":
-        return {"provider": "mock", "model": "local-demo"}
     if PROVIDER == "claude":
         return {"provider": "claude", "model": CLAUDE_MODEL}
     if PROVIDER == "jeonbuk":

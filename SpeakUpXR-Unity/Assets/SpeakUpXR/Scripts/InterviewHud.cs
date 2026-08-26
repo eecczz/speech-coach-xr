@@ -1,6 +1,7 @@
 // World-space question/status panel — C# port of interview-ui.ts.
 // Uses legacy UGUI Text with a dynamic font so Korean renders without a TMP font atlas.
 
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,6 +16,10 @@ namespace SpeakUpXR
         public Text InterimText;
         public Text SpeakerText;
         public Image StatusPill;
+        [Range(8f, 60f)] public float CharactersPerSecond = 24f;
+        public bool CompactCompanionLayout;
+
+        private Coroutine _questionTyping;
 
         private static readonly Color AskColor = new(0.18f, 0.17f, 0.23f);
         private static readonly Color ListenColor = new(0.02f, 0.59f, 0.41f);
@@ -32,7 +37,7 @@ namespace SpeakUpXR
             Transform dialogue = transform.Find("DialogueBox_BOTTOM_ONLY");
             if (dialogue) dialogue.gameObject.SetActive(true);
             RectTransform dialogueRect = dialogue as RectTransform;
-            if (dialogueRect)
+            if (dialogueRect && !CompactCompanionLayout)
             {
                 dialogueRect.anchorMin = dialogueRect.anchorMax = new Vector2(0.5f, 0f);
                 dialogueRect.pivot = new Vector2(0.5f, 0f);
@@ -43,10 +48,10 @@ namespace SpeakUpXR
             SetTextVisible(QuestionText, new Color(0.94f, 0.96f, 1f));
             SetTextVisible(InterimText, new Color(0.67f, 0.71f, 0.78f));
             SetTextVisible(StatusText, new Color(0.43f, 0.66f, 1f));
-            ResizeText(SpeakerText, 28, 1040f);
-            ResizeText(QuestionText, 40, 1520f);
-            ResizeText(InterimText, 23, 1520f);
-            ResizeText(StatusText, 23, 440f);
+            ResizeText(SpeakerText, CompactCompanionLayout ? 22 : 28, CompactCompanionLayout ? 610f : 1040f);
+            ResizeText(QuestionText, CompactCompanionLayout ? 28 : 40, CompactCompanionLayout ? 610f : 1520f);
+            ResizeText(InterimText, CompactCompanionLayout ? 18 : 23, CompactCompanionLayout ? 610f : 1520f);
+            ResizeText(StatusText, CompactCompanionLayout ? 18 : 23, CompactCompanionLayout ? 240f : 440f);
 
             if (dialogue)
             {
@@ -78,8 +83,41 @@ namespace SpeakUpXR
 
         public void SetQuestion(string text)
         {
-            if (QuestionText) QuestionText.text = text;
+            if (_questionTyping != null)
+            {
+                StopCoroutine(_questionTyping);
+                _questionTyping = null;
+            }
+            if (QuestionText)
+            {
+                if (isActiveAndEnabled && gameObject.activeInHierarchy)
+                    _questionTyping = StartCoroutine(TypeQuestion(text ?? string.Empty));
+                else
+                    QuestionText.text = text ?? string.Empty;
+            }
             SetInterim("");
+        }
+
+        public float EstimateTypingSeconds(string text) =>
+            string.IsNullOrEmpty(text) ? 0f : text.Length / Mathf.Max(1f, CharactersPerSecond);
+
+        private IEnumerator TypeQuestion(string fullText)
+        {
+            QuestionText.text = string.Empty;
+            if (string.IsNullOrEmpty(fullText))
+            {
+                _questionTyping = null;
+                yield break;
+            }
+            float shown = 0f;
+            while (shown < fullText.Length)
+            {
+                shown += CharactersPerSecond * Time.unscaledDeltaTime;
+                QuestionText.text = fullText.Substring(0, Mathf.Min(fullText.Length, Mathf.FloorToInt(shown)));
+                yield return null;
+            }
+            QuestionText.text = fullText;
+            _questionTyping = null;
         }
 
         public void SetSpeaker(string text)

@@ -26,7 +26,7 @@ namespace SpeakUpXR
     {
         [Header("Identity / routing")]
         public string PersonaId = "warm";
-        public string DisplayName = "따뜻한 인사 담당";
+        public string DisplayName = "인사 면접관";
         public InterviewerPersonality Personality = InterviewerPersonality.Warm;
         public InterviewerVoice Voice = new();
 

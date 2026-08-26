@@ -1,5 +1,5 @@
 Convai 4.5.0 Sandbox validation
-Generated: 2026-08-25 13:11:58
+Generated: 2026-08-26 21:30:31
 Operation: 기존 시험 씬 검증
 SourceScene: Assets/Convai SDK For Unity/Samples/LipSyncSample/Scenes/LipSync Sample.unity
 TargetScene: Assets/SpeakUpXR/Scenes/ConvaiSandbox.unity

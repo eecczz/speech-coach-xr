@@ -1,0 +1,9 @@
+Interviewer presentation normalization
+Generated: 2026-08-26 20:39:55
+Nameplates: 3
+CommonDistance: 1.453
+VerticalOffset: -0.730
+FrontRotationLock: ENABLED
+CharacterSmoothness: 0.20
+CharacterSpecular: 0.28
+EnvironmentMaterialsChanged: NO
