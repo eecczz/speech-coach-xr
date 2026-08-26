@@ -16,10 +16,12 @@ namespace SpeakUpXR.Editor
     {
         private const string ScenePath = "Assets/SpeakUpXR/Scenes/Interview.unity";
         private const string PrefabPath = "Assets/Stylized3DMonster/Monster40/Prefab/Monster40_01.prefab";
+        private const string MaterialPath = "Assets/Stylized3DMonster/Monster40/ShaderTexture/Monster40_01.mat";
+        private const string TexturePath = "Assets/Stylized3DMonster/Monster40/ShaderTexture/Monster40_01.png";
         private const string ClipPath = "Assets/Stylized3DMonster/Monster40/Monster38_Idle01.anim";
         private const string ControllerPath = "Assets/SpeakUpXR/Animations/FeedbackMonster.controller";
         private const string ReportPath = "Assets/SpeakUpXR/UI/feedback-companion-install-v1.txt";
-        private const int Revision = 2;
+        private const int Revision = 6;
 
         [InitializeOnLoadMethod]
         private static void Schedule() => EditorApplication.delayCall += InstallIfNeeded;
@@ -77,9 +79,16 @@ namespace SpeakUpXR.Editor
                 }
 
                 companion.HeadAnchor = player.HeadCamera.transform;
+                companion.Api = session.Api;
+                companion.VoiceSource = companion.GetComponent<AudioSource>() ?? companion.gameObject.AddComponent<AudioSource>();
+                companion.VoiceSource.playOnAwake = false;
+                companion.VoiceSource.spatialBlend = 0f;
+                companion.Voice ??= new InterviewerVoice();
+                companion.Voice.VoiceName = "ko-KR-InJoonNeural";
+                companion.Voice.RatePercent = 3;
+                companion.Voice.PitchPercent = 1;
                 companion.transform.SetParent(player.HeadCamera.transform, false);
                 companion.transform.localPosition = companion.LocalOffset;
-                companion.transform.localRotation = Quaternion.Euler(companion.LocalEuler);
                 companion.transform.localScale = companion.LocalScale;
                 companion.CharacterAnimator = companion.CharacterRoot
                     ? companion.CharacterRoot.GetComponentInChildren<Animator>(true)
@@ -94,8 +103,14 @@ namespace SpeakUpXR.Editor
                     EditorUtility.SetDirty(companion.CharacterAnimator);
                 }
 
+                ConfigureYetiMaterial(companion.CharacterRoot);
+                companion.DisplayName = "예티 코치";
+                companion.FaceHeadCamera = true;
+                companion.LookAtEulerOffset = Vector3.zero;
+
                 if (!companion.DialogueHud) BuildDialogue(scene, companion);
                 ConfigureDialogue(companion);
+                int removedOrbitCameras = RemoveConvaiOrbitCameras(scene, player.HeadCamera);
                 DisableUnrequestedConvaiUi(scene);
                 EnsureCameraVisibilityGuard(player, session);
                 session.FeedbackCompanion = companion;
@@ -121,9 +136,13 @@ namespace SpeakUpXR.Editor
                     $"Animator: {(companion.CharacterAnimator ? "BOUND" : "MISSING")}",
                     $"HeadAnchor: {player.HeadCamera.name}",
                     $"LocalOffset: {companion.LocalOffset}",
-                    "FeedbackTTS: DISABLED",
-                    "TypewriterDialogue: ENABLED",
-                    "DialoguePosition: TOP_RIGHT",
+                    "FeedbackTTS: ENABLED",
+                    "TypewriterDialogue: AUDIO_START_SYNCHRONIZED",
+                    "DialoguePosition: TOP_LEFT",
+                    "DisplayName: 예티 코치",
+                    "CameraLookAt: YAW_AND_PITCH",
+                    $"Material: {MaterialPath}",
+                    $"RemovedConvaiOrbitCameras: {removedOrbitCameras}",
                     "ConvaiSampleTranscriptUI: DISABLED",
                     "CameraOcclusionGuard: ENABLED",
                     "SceneAuthored: YES",
@@ -144,9 +163,49 @@ namespace SpeakUpXR.Editor
             }
         }
 
+        private static int RemoveConvaiOrbitCameras(Scene scene, Camera headCamera)
+        {
+            Camera[] cameras = scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Camera>(true))
+                .Where(camera => camera && camera != headCamera && camera.name == "Convai Orbit Camera")
+                .ToArray();
+            foreach (Camera camera in cameras)
+                UnityEngine.Object.DestroyImmediate(camera.gameObject);
+            return cameras.Length;
+        }
+
+        private static void ConfigureYetiMaterial(GameObject characterRoot)
+        {
+            if (!characterRoot) return;
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+            Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(TexturePath);
+            Shader urpLit = Shader.Find("Universal Render Pipeline/Simple Lit");
+            if (!material || !texture || !urpLit)
+                throw new MissingReferenceException("예티의 머티리얼, 텍스처 또는 URP Simple Lit 셰이더를 찾지 못했습니다.");
+
+            material.shader = urpLit;
+            material.SetTexture("_BaseMap", texture);
+            material.SetTexture("_MainTex", texture);
+            material.SetColor("_BaseColor", Color.white);
+            material.SetColor("_Color", Color.white);
+            material.SetFloat("_Metallic", 0f);
+            material.SetFloat("_Smoothness", 0.12f);
+            material.SetFloat("_SpecularHighlights", 0f);
+            EditorUtility.SetDirty(material);
+
+            foreach (Renderer renderer in characterRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] materials = renderer.sharedMaterials;
+                if (materials.Length == 0) materials = new Material[1];
+                for (int i = 0; i < materials.Length; i++) materials[i] = material;
+                renderer.sharedMaterials = materials;
+                EditorUtility.SetDirty(renderer);
+            }
+        }
+
         private static void BuildDialogue(Scene scene, FeedbackCompanionController companion)
         {
-            var canvasObject = new GameObject("FeedbackDialogue_TOP_RIGHT", typeof(RectTransform), typeof(Canvas),
+            var canvasObject = new GameObject("FeedbackDialogue_TOP_LEFT", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup), typeof(AdaptiveWorldCanvas));
             SceneManager.MoveGameObjectToScene(canvasObject, scene);
             var canvas = canvasObject.GetComponent<Canvas>();
@@ -154,12 +213,12 @@ namespace SpeakUpXR.Editor
             canvas.overrideSorting = true;
             canvas.sortingOrder = 1100;
             var adaptive = canvasObject.GetComponent<AdaptiveWorldCanvas>();
-            adaptive.DesktopAnchor = new Vector2(1f, 1f);
-            adaptive.DesktopPivot = new Vector2(1f, 1f);
-            adaptive.DesktopPosition = new Vector2(-36f, -36f);
+            adaptive.DesktopAnchor = new Vector2(0f, 1f);
+            adaptive.DesktopPivot = new Vector2(0f, 1f);
+            adaptive.DesktopPosition = new Vector2(36f, -36f);
             adaptive.DesktopSize = new Vector2(720f, 190f);
             adaptive.AttachToHeadInXr = true;
-            adaptive.XrLocalPosition = new Vector3(0.24f, 0.16f, 0.76f);
+            adaptive.XrLocalPosition = new Vector3(-0.24f, 0.16f, 0.76f);
             adaptive.XrLocalEuler = Vector3.zero;
             adaptive.XrWorldScale = 0.00055f;
 
@@ -189,15 +248,15 @@ namespace SpeakUpXR.Editor
         {
             if (!companion.DialogueHud) return;
             GameObject canvasObject = companion.DialogueHud.gameObject;
-            canvasObject.name = "FeedbackDialogue_TOP_RIGHT";
+            canvasObject.name = "FeedbackDialogue_TOP_LEFT";
             AdaptiveWorldCanvas adaptive = canvasObject.GetComponent<AdaptiveWorldCanvas>();
             if (!adaptive) adaptive = canvasObject.AddComponent<AdaptiveWorldCanvas>();
-            adaptive.DesktopAnchor = new Vector2(1f, 1f);
-            adaptive.DesktopPivot = new Vector2(1f, 1f);
-            adaptive.DesktopPosition = new Vector2(-36f, -36f);
+            adaptive.DesktopAnchor = new Vector2(0f, 1f);
+            adaptive.DesktopPivot = new Vector2(0f, 1f);
+            adaptive.DesktopPosition = new Vector2(36f, -36f);
             adaptive.DesktopSize = new Vector2(720f, 190f);
             adaptive.AttachToHeadInXr = true;
-            adaptive.XrLocalPosition = new Vector3(0.24f, 0.16f, 0.76f);
+            adaptive.XrLocalPosition = new Vector3(-0.24f, 0.16f, 0.76f);
             adaptive.XrLocalEuler = Vector3.zero;
             adaptive.XrWorldScale = 0.00055f;
             EditorUtility.SetDirty(adaptive);

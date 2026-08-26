@@ -23,12 +23,12 @@ AI 가상 면접관 기반 몰입형 면접 코칭 앱. **마감 2026-08-27** (�
 - ✅ 서버 프록시 Azure 한국어 TTS + 실제 오디오 파형 기반 립싱크, 키가 없을 때 자막 타이밍 폴백
 - ✅ 종료 인사 후 `timeScale=0`, 비동기 리포트 로딩 및 월드 리포트 표시
 - ✅ Quest APK 빌드 통과 (`XrSetup.BuildApk` → `Builds/SpeakUpXR.apk`, 45MB)
-- ✅ mock 백엔드 E2E (에디터 Play: Space=시작, Enter=답변, 우클릭 드래그=시점)
+- ✅ 실제 음성 답변 E2E (10초 무응답 시 면접관 안내 후 자동으로 다음 질문)
 - ⏳ 다음: 역할별 상용 VRM/FBX와 면접장 에셋으로 placeholder 교체 → Quest 실기 테스트 → 시각 품질 조정
 
 ## 실행 방법
 
-- 백엔드(mock, 키 불필요): `services/coach`에서 Windows `.\run.ps1` / macOS `./run.sh`
+- 백엔드: `services/coach`에서 Windows `.\run.ps1` / macOS `./run.sh`
 - 최초/초기화용 씬 생성: **SpeakUpXR → Create Editable Interview Scene**. 생성 후에는 `Interview.unity`가 소스 오브 트루스이며 씬을 직접 편집
 - XR/플레이어 설정 일괄 적용: `-executeMethod XrSetup.Configure -buildTarget Android` (배치)
 - APK: `-executeMethod XrSetup.BuildApk` (배치, `-quit` 없이 — 스스로 Exit)
@@ -41,4 +41,4 @@ AI 가상 면접관 기반 몰입형 면접 코칭 앱. **마감 2026-08-27** (�
 - OpenXR 빌드 검증: **Linear 색공간 + Vulkan 단독** 아니면 빌드 실패 (Gamma+GLES 거부)
 - 현재 캐릭터는 씬에서 보이는 placeholder. 실제 모델에는 앉기 애니메이션/포즈를 적용한다.
 - 스크립트 수정 시 `unity-staging/`에도 복사해 동기화 유지
-- `.env`/API 키는 공유 PC에 두지 않는다. LLM은 당분간 `LLM_PROVIDER=mock`
+- `.env`/API 키는 공유 PC에 두지 않는다. 면접 질문과 반응은 실제 LLM 경로를 사용한다.

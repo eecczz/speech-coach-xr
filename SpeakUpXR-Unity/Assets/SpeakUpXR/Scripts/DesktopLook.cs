@@ -10,6 +10,13 @@ namespace SpeakUpXR
         public float Sensitivity = 2.5f;
         private float _yaw, _pitch;
 
+        public void ResetView()
+        {
+            _yaw = 0f;
+            _pitch = 0f;
+            transform.localRotation = Quaternion.identity;
+        }
+
         private void Update()
         {
             if (!Input.GetMouseButton(1)) return;

@@ -40,7 +40,7 @@ namespace SpeakUpXR
 #endif
             if (Microphone.devices.Length == 0)
             {
-                Debug.LogWarning("[microphone] no input device; use desktop answer override");
+                Debug.LogWarning("[microphone] no input device; voice answer recording unavailable");
                 return false;
             }
             _device = Array.Exists(Microphone.devices, d => d == PreferredDevice) ? PreferredDevice : Microphone.devices[0];

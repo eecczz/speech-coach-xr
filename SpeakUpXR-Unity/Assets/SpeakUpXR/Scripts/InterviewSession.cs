@@ -122,12 +122,12 @@ namespace SpeakUpXR
             StartCoroutine(RunIntro());
         }
 
-        /// <summary>XR controller/UI answer-complete action. Desktop tests may pass text.</summary>
-        public void FinishAnswer(string answerOverride = null)
+        /// <summary>XR controller/UI action that finishes the current recorded answer.</summary>
+        public void FinishAnswer()
         {
             if (State != SessionState.Listening || _answerBusy) return;
             _answerBusy = true;
-            StartCoroutine(CaptureAndAnalyzeAnswer(answerOverride));
+            StartCoroutine(CaptureAndAnalyzeAnswer());
         }
 
         private void SetState(SessionState value)
@@ -194,10 +194,16 @@ namespace SpeakUpXR
         {
             Signals?.EndAnswer();
             Microphone?.End();
-            if (FeedbackCompanion)
-                yield return FeedbackCompanion.SpeakFeedback("아, 네. 다음 질문으로 넘어갈까요?", "neutral");
+            const string timeoutLine = "다음 질문으로 넘어가겠습니다.";
+            var timeoutSpeaker = Panel ? Panel.Find("warm", "behavioral") : null;
+            Hud?.SetSpeaker(timeoutSpeaker ? timeoutSpeaker.DisplayName : "면접관");
+            Hud?.SetQuestion(timeoutLine);
+            Hud?.SetStatus("무응답 안내", HudTone.Ask);
+            yield return Speak(timeoutLine, "warm", "behavioral", "neutral");
 
-            _current.answer = "(10초 이상 무응답)";
+            // An unanswered turn stays empty. Never inject placeholder/sample text
+            // into the LLM history or the final interview report.
+            _current.answer = string.Empty;
             _current.wpm = -1f;
             _current.gaze_ratio = Signals ? Signals.CurrentGazeRatio : -1f;
             _current.gaze_switches = Signals ? Signals.CurrentSwitches : 0;
@@ -208,10 +214,10 @@ namespace SpeakUpXR
             _current.gesture_idle_seconds = Signals ? Signals.CurrentGestureIdleSeconds : -1f;
             _history.Add(_current);
             _answerBusy = false;
-            yield return ThinkAndContinue();
+            yield return ThinkAndContinue(skipReaction: true);
         }
 
-        private IEnumerator CaptureAndAnalyzeAnswer(string answerOverride)
+        private IEnumerator CaptureAndAnalyzeAnswer()
         {
             SetState(SessionState.Analyzing);
             Hud?.SetStatus("답변을 정리하는 중", HudTone.Think);
@@ -220,12 +226,10 @@ namespace SpeakUpXR
             AudioAnalysisResponse analysis = null;
             string error = null;
 
-            if (string.IsNullOrWhiteSpace(answerOverride) && wav != null && Api)
+            if (wav != null && Api)
                 yield return Api.AnalyzeAudio(wav, _sessionId, value => analysis = value, value => error = value);
 
-            _current.answer = !string.IsNullOrWhiteSpace(answerOverride)
-                ? answerOverride.Trim()
-                : analysis?.full_transcript?.Trim() ?? "";
+            _current.answer = analysis?.full_transcript?.Trim() ?? "";
             _current.wpm = analysis != null ? analysis.WeightedWpm() : -1f;
             _current.filler_count = analysis?.FillerCount() ?? 0;
             _current.gaze_ratio = Signals ? Signals.CurrentGazeRatio : -1f;
@@ -265,7 +269,7 @@ namespace SpeakUpXR
             yield break;
         }
 
-        private IEnumerator ThinkAndContinue()
+        private IEnumerator ThinkAndContinue(bool skipReaction = false)
         {
             SetState(SessionState.Thinking);
             Hud?.SetStatus("다음 질문을 준비하는 중", HudTone.Think);
@@ -296,7 +300,7 @@ namespace SpeakUpXR
                 yield break;
             }
 
-            if (!string.IsNullOrWhiteSpace(next.reaction))
+            if (!skipReaction && !string.IsNullOrWhiteSpace(next.reaction))
             {
                 var reactionSpeaker = Panel ? Panel.Find(next.reaction_speaker, next.kind) : null;
                 Hud?.SetSpeaker(reactionSpeaker ? reactionSpeaker.DisplayName : "면접관");
@@ -386,12 +390,25 @@ namespace SpeakUpXR
 
         private IEnumerator Speak(string line, string speakerId, string kind, string tone)
         {
-            if (Panel) yield return Panel.SpeakLine(Api, line, speakerId, kind, tone);
+            Hud?.PrepareQuestion(line);
+            bool textStarted = false;
+            Action<float> startText = speechSeconds =>
+            {
+                if (textStarted) return;
+                textStarted = true;
+                Hud?.PlaySynchronizedQuestion(line, speechSeconds);
+            };
+
+            if (Panel) yield return Panel.SpeakLine(Api, line, speakerId, kind, tone, startText);
             else
             {
-                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.3f + line.Length * 0.055f, 1.8f, 12f);
+                float fallbackSeconds = Mathf.Clamp(1.3f + line.Length * 0.12f, 1.8f, 12f);
+                startText(fallbackSeconds);
+                float end = Time.realtimeSinceStartup + fallbackSeconds;
                 while (Time.realtimeSinceStartup < end) yield return null;
             }
+            if (!textStarted) startText(Mathf.Max(0.1f, Hud ? Hud.EstimateTypingSeconds(line) : 1f));
+            Hud?.CompleteQuestion(line);
         }
     }
 }

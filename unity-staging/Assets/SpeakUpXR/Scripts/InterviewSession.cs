@@ -82,12 +82,12 @@ namespace SpeakUpXR
             StartCoroutine(RunIntro());
         }
 
-        /// <summary>XR controller/UI answer-complete action. Desktop tests may pass text.</summary>
-        public void FinishAnswer(string answerOverride = null)
+        /// <summary>XR controller/UI action that finishes the current recorded answer.</summary>
+        public void FinishAnswer()
         {
             if (State != SessionState.Listening || _answerBusy) return;
             _answerBusy = true;
-            StartCoroutine(CaptureAndAnalyzeAnswer(answerOverride));
+            StartCoroutine(CaptureAndAnalyzeAnswer());
         }
 
         private void SetState(SessionState value)
@@ -127,7 +127,7 @@ namespace SpeakUpXR
             Microphone?.Begin();
         }
 
-        private IEnumerator CaptureAndAnalyzeAnswer(string answerOverride)
+        private IEnumerator CaptureAndAnalyzeAnswer()
         {
             SetState(SessionState.Analyzing);
             Hud?.SetStatus("답변을 정리하는 중", HudTone.Think);
@@ -136,12 +136,10 @@ namespace SpeakUpXR
             AudioAnalysisResponse analysis = null;
             string error = null;
 
-            if (string.IsNullOrWhiteSpace(answerOverride) && wav != null && Api)
+            if (wav != null && Api)
                 yield return Api.AnalyzeAudio(wav, _sessionId, value => analysis = value, value => error = value);
 
-            _current.answer = !string.IsNullOrWhiteSpace(answerOverride)
-                ? answerOverride.Trim()
-                : analysis?.full_transcript?.Trim() ?? "";
+            _current.answer = analysis?.full_transcript?.Trim() ?? "";
             _current.wpm = analysis != null ? analysis.WeightedWpm() : -1f;
             _current.filler_count = analysis?.FillerCount() ?? 0;
             _current.gaze_ratio = Signals ? Signals.CurrentGazeRatio : -1f;

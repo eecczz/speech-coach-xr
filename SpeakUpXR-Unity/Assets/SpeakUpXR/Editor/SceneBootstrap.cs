@@ -54,7 +54,6 @@ public static class SceneBootstrap
         liveFeedback.Api = api;
         liveFeedback.Panel = panel;
         liveFeedback.Hud = hud;
-        system.AddComponent<DevKeyboardDriver>().Session = session;
         system.AddComponent<XrAnswerInput>().Session = session;
 
         System.IO.Directory.CreateDirectory("Assets/SpeakUpXR/Scenes");

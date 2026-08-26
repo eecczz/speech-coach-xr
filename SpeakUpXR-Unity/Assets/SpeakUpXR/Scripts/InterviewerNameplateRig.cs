@@ -17,6 +17,7 @@ namespace SpeakUpXR
         public bool LockDuringEntrance;
 
         private Vector3[] _planarDirections = Array.Empty<Vector3>();
+        private float[] _authoredWorldHeights = Array.Empty<float>();
         private bool _initializedForPlay;
 
         private void OnEnable() => _initializedForPlay = false;
@@ -42,9 +43,11 @@ namespace SpeakUpXR
         {
             if (!Viewer || Nameplates == null) return;
             _planarDirections = new Vector3[Nameplates.Length];
+            _authoredWorldHeights = new float[Nameplates.Length];
             for (int i = 0; i < Nameplates.Length; i++)
             {
                 if (!Nameplates[i]) continue;
+                _authoredWorldHeights[i] = Nameplates[i].position.y;
                 Vector3 direction = Nameplates[i].position - Viewer.position;
                 direction.y = 0f;
                 _planarDirections[i] = direction.sqrMagnitude > 0.0001f
@@ -64,8 +67,14 @@ namespace SpeakUpXR
                 if (direction.sqrMagnitude < 0.0001f) direction = Viewer.forward;
                 direction.y = 0f;
                 direction.Normalize();
-                plate.position = Viewer.position + direction * DistanceFromViewer +
-                                 Vector3.up * VerticalOffsetFromEyes;
+                Vector3 position = Viewer.position + direction * DistanceFromViewer;
+                // HMD tracking changes the camera's world-space Y at runtime. Keep
+                // the scene-authored nameplate height so the labels stay above the
+                // desk, while still enforcing a common horizontal viewing distance.
+                position.y = i < _authoredWorldHeights.Length
+                    ? _authoredWorldHeights[i]
+                    : plate.position.y;
+                plate.position = position;
 
                 // World-space UGUI is read from its -forward side, so +forward points
                 // away from the player. All three plates consequently share a true

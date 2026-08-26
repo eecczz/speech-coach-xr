@@ -5,7 +5,7 @@ using UnityEngine.XR;
 namespace SpeakUpXR
 {
     /// <summary>
-    /// Drives the scene-authored candidate and mounts the XR rig under the humanoid head.
+    /// Drives the scene-authored candidate and moves the XR rig to the humanoid head.
     /// Translation is deterministic from frame one; the walk clip supplies body/head motion
     /// but is not trusted to contain usable root translation.
     /// </summary>
@@ -51,6 +51,9 @@ namespace SpeakUpXR
 
         private Transform _headBone;
         private Quaternion _avatarForwardToHeadOffset;
+        private Behaviour _trackedPoseDriver;
+        private bool _trackedPoseDriverAuthoredEnabled;
+        private bool? _lastXrDeviceActive;
 
         private void Awake()
         {
@@ -59,6 +62,9 @@ namespace SpeakUpXR
             if (!XrOrigin && HeadCamera) XrOrigin = HeadCamera.transform.root;
             if (!CameraOffset && HeadCamera && HeadCamera.transform.parent)
                 CameraOffset = HeadCamera.transform.parent;
+
+            CacheTrackedPoseDriver();
+            ConfigureViewDriver();
 
             _headBone = Animator ? Animator.GetBoneTransform(HumanBodyBones.Head) : null;
             if (_headBone)
@@ -71,6 +77,8 @@ namespace SpeakUpXR
 
         private void LateUpdate()
         {
+            ConfigureViewDriver();
+
             // Read the tracked view before touching the Head bone. XR Origin is a
             // child of that bone, so it is restored in world space below to avoid
             // applying the HMD rotation to the camera a second time.
@@ -88,9 +96,10 @@ namespace SpeakUpXR
                 Vector3 worldOffset = transform.right * CameraAtHeadOffset.x
                     + Vector3.up * CameraAtHeadOffset.y
                     + transform.forward * CameraAtHeadOffset.z;
-                XrOrigin.SetPositionAndRotation(
-                    _headBone.position + worldOffset,
-                    Quaternion.LookRotation(transform.forward, Vector3.up));
+                // Position follows the animated head, but the scene-authored XR Origin
+                // rotation is never rewritten. Rotating this parent made its tracked
+                // camera child orbit to the old right-rear preview position.
+                XrOrigin.position = _headBone.position + worldOffset;
             }
             if (CameraOffset)
                 CameraOffset.localPosition = XRSettings.isDeviceActive
@@ -121,7 +130,9 @@ namespace SpeakUpXR
         {
             if (!Animator || !entrancePoint || !seatPoint) yield break;
 
-            transform.SetPositionAndRotation(entrancePoint.position, entrancePoint.rotation);
+            // Use the final seated forward from the very first entrance frame. This
+            // prevents a stale/wrong entrance yaw from being visible until sitting.
+            transform.SetPositionAndRotation(entrancePoint.position, seatPoint.rotation);
             Animator.applyRootMotion = false;
 
             // Never allow an authored cue delay to turn into a visible in-place walk.
@@ -137,7 +148,7 @@ namespace SpeakUpXR
                 if (direction.sqrMagnitude > 0.001f)
                 {
                     transform.rotation = Quaternion.Slerp(transform.rotation,
-                        Quaternion.LookRotation(direction.normalized, Vector3.up),
+                        seatPoint.rotation,
                         TurnSpeed * Time.unscaledDeltaTime);
                     transform.position = Vector3.MoveTowards(
                         transform.position,
@@ -153,6 +164,23 @@ namespace SpeakUpXR
             yield return PlayCue(Animator, SitDown, true);
             yield return PlayCue(Animator, SeatedIdle, false);
             Animator.applyRootMotion = false;
+        }
+
+        /// <summary>
+        /// Called by the entrance sequence during Awake, before the first rendered
+        /// frame, so the camera never exposes the prefab's previous world rotation.
+        /// </summary>
+        public void PrepareEntrancePose(Transform entrancePoint, Transform seatPoint)
+        {
+            if (!entrancePoint) return;
+            Quaternion facing = seatPoint ? seatPoint.rotation : entrancePoint.rotation;
+            transform.SetPositionAndRotation(entrancePoint.position, facing);
+            if (CameraOffset) CameraOffset.localRotation = Quaternion.identity;
+            if (HeadCamera && !XRSettings.isDeviceActive)
+            {
+                HeadCamera.GetComponent<DesktopLook>()?.ResetView();
+                HeadCamera.transform.localRotation = Quaternion.identity;
+            }
         }
 
         private static void PlayCueImmediately(Animator animator, AnimationCueTiming cue)
@@ -181,13 +209,10 @@ namespace SpeakUpXR
         private void AttachCameraRigToHead()
         {
             if (!_headBone || !XrOrigin || !HeadCamera) return;
-            XrOrigin.SetParent(_headBone, false);
             Vector3 worldOffset = transform.right * CameraAtHeadOffset.x
                 + Vector3.up * CameraAtHeadOffset.y
                 + transform.forward * CameraAtHeadOffset.z;
-            XrOrigin.SetPositionAndRotation(
-                _headBone.position + worldOffset,
-                Quaternion.LookRotation(transform.forward, Vector3.up));
+            XrOrigin.position = _headBone.position + worldOffset;
             if (CameraOffset)
             {
                 CameraOffset.localPosition = Vector3.zero;
@@ -197,6 +222,33 @@ namespace SpeakUpXR
             HeadCamera.transform.localRotation = Quaternion.identity;
             HeadCamera.nearClipPlane = 0.02f;
             HeadCamera.fieldOfView = FieldOfView;
+        }
+
+        private void CacheTrackedPoseDriver()
+        {
+            if (!HeadCamera || _trackedPoseDriver) return;
+            foreach (Behaviour behaviour in HeadCamera.GetComponents<Behaviour>())
+            {
+                if (!behaviour || behaviour.GetType().Name != "TrackedPoseDriver") continue;
+                _trackedPoseDriver = behaviour;
+                _trackedPoseDriverAuthoredEnabled = behaviour.enabled;
+                break;
+            }
+        }
+
+        private void ConfigureViewDriver()
+        {
+            bool xrActive = XRSettings.isDeviceActive;
+            if (_lastXrDeviceActive == xrActive) return;
+            _lastXrDeviceActive = xrActive;
+
+            CacheTrackedPoseDriver();
+            if (_trackedPoseDriver)
+                _trackedPoseDriver.enabled = xrActive && _trackedPoseDriverAuthoredEnabled;
+
+            if (xrActive || !HeadCamera) return;
+            HeadCamera.GetComponent<DesktopLook>()?.ResetView();
+            HeadCamera.transform.localRotation = Quaternion.identity;
         }
 
         private static float PlanarDistance(Vector3 a, Vector3 b)

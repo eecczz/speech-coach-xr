@@ -45,7 +45,6 @@ public static class SceneBootstrap
         session.ReportView = report;
         session.MaxQuestions = 5;
         session.AutoStart = true;
-        system.AddComponent<DevKeyboardDriver>().Session = session;
         system.AddComponent<XrAnswerInput>().Session = session;
 
         System.IO.Directory.CreateDirectory("Assets/SpeakUpXR/Scenes");

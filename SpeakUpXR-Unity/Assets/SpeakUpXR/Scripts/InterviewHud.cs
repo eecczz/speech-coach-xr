@@ -83,25 +83,50 @@ namespace SpeakUpXR
 
         public void SetQuestion(string text)
         {
-            if (_questionTyping != null)
-            {
-                StopCoroutine(_questionTyping);
-                _questionTyping = null;
-            }
+            string line = text ?? string.Empty;
+            PlaySynchronizedQuestion(line, EstimateTypingSeconds(line));
+        }
+
+        /// <summary>Clears the old line while TTS/Convai audio is still loading.</summary>
+        public void PrepareQuestion(string text)
+        {
+            StopQuestionTyping();
+            if (QuestionText) QuestionText.text = string.Empty;
+            SetInterim("");
+        }
+
+        /// <summary>Starts one-character-at-a-time output on the audible speech frame.</summary>
+        public void PlaySynchronizedQuestion(string text, float speechSeconds)
+        {
+            StopQuestionTyping();
+            string line = text ?? string.Empty;
             if (QuestionText)
             {
                 if (isActiveAndEnabled && gameObject.activeInHierarchy)
-                    _questionTyping = StartCoroutine(TypeQuestion(text ?? string.Empty));
+                    _questionTyping = StartCoroutine(TypeQuestion(line, speechSeconds));
                 else
-                    QuestionText.text = text ?? string.Empty;
+                    QuestionText.text = line;
             }
             SetInterim("");
+        }
+
+        public void CompleteQuestion(string text)
+        {
+            StopQuestionTyping();
+            if (QuestionText) QuestionText.text = text ?? string.Empty;
         }
 
         public float EstimateTypingSeconds(string text) =>
             string.IsNullOrEmpty(text) ? 0f : text.Length / Mathf.Max(1f, CharactersPerSecond);
 
-        private IEnumerator TypeQuestion(string fullText)
+        private void StopQuestionTyping()
+        {
+            if (_questionTyping == null) return;
+            StopCoroutine(_questionTyping);
+            _questionTyping = null;
+        }
+
+        private IEnumerator TypeQuestion(string fullText, float speechSeconds)
         {
             QuestionText.text = string.Empty;
             if (string.IsNullOrEmpty(fullText))
@@ -109,12 +134,14 @@ namespace SpeakUpXR
                 _questionTyping = null;
                 yield break;
             }
-            float shown = 0f;
-            while (shown < fullText.Length)
+            float duration = Mathf.Max(0.05f, speechSeconds);
+            float interval = duration / fullText.Length;
+            float startedAt = Time.realtimeSinceStartup;
+            for (int shown = 1; shown <= fullText.Length; shown++)
             {
-                shown += CharactersPerSecond * Time.unscaledDeltaTime;
-                QuestionText.text = fullText.Substring(0, Mathf.Min(fullText.Length, Mathf.FloorToInt(shown)));
-                yield return null;
+                QuestionText.text = fullText.Substring(0, shown);
+                float nextCharacterAt = startedAt + shown * interval;
+                while (Time.realtimeSinceStartup < nextCharacterAt) yield return null;
             }
             QuestionText.text = fullText;
             _questionTyping = null;

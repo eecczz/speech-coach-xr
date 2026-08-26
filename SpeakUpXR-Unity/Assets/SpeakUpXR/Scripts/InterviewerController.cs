@@ -139,14 +139,14 @@ namespace SpeakUpXR
             }
         }
 
-        public IEnumerator Speak(CoachApi api, string text, string tone)
+        public IEnumerator Speak(CoachApi api, string text, string tone, Action<float> speechStarted = null)
         {
             if (!_facialFallback) _facialFallback = GetComponent<ConvaiFacialSpeechFallback>();
             _facialFallback?.SetDialogueExpression(tone, Personality);
             if (ConvaiBridge && ConvaiBridge.UseConvaiSpeech)
             {
                 bool spokenByConvai = false;
-                yield return ConvaiBridge.SpeakExact(text, tone, value => spokenByConvai = value);
+                yield return ConvaiBridge.SpeakExact(text, tone, value => spokenByConvai = value, speechStarted);
                 if (spokenByConvai)
                 {
                     _facialFallback?.ClearDialogueExpression();
@@ -160,11 +160,14 @@ namespace SpeakUpXR
             AudioClip clip = null;
             string ttsError = null;
             if (api) yield return api.Synthesize(text, Voice, tone, value => clip = value, value => ttsError = value);
-            SetSpeaking(true);
-            PlaySpeakingGesture();
             if (clip && VoiceSource)
             {
+                float audioAt = Time.realtimeSinceStartup + AudioStartDelaySeconds;
+                while (Time.realtimeSinceStartup < audioAt) yield return null;
+                SetSpeaking(true);
+                PlaySpeakingGesture();
                 VoiceSource.clip = clip;
+                speechStarted?.Invoke(Mathf.Max(0.1f, clip.length));
                 VoiceSource.Play();
                 while (VoiceSource.isPlaying) yield return null;
                 VoiceSource.clip = null;
@@ -174,7 +177,11 @@ namespace SpeakUpXR
             {
                 // Preserve visible articulation even if both remote and local audio
                 // fail, so on-screen dialogue never has a frozen face.
-                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.2f + text.Length * 0.07f, 1.8f, 12f);
+                float fallbackSeconds = Mathf.Clamp(1.2f + text.Length * 0.12f, 1.8f, 12f);
+                SetSpeaking(true);
+                PlaySpeakingGesture();
+                speechStarted?.Invoke(fallbackSeconds);
+                float end = Time.realtimeSinceStartup + fallbackSeconds;
                 while (Time.realtimeSinceStartup < end) yield return null;
             }
             SetSpeaking(false);

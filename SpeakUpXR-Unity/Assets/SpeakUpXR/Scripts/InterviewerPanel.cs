@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -38,17 +39,20 @@ namespace SpeakUpXR
             return null;
         }
 
-        public IEnumerator SpeakLine(CoachApi api, string line, string speakerId, string kind, string tone = "neutral")
+        public IEnumerator SpeakLine(CoachApi api, string line, string speakerId, string kind,
+            string tone = "neutral", Action<float> speechStarted = null)
         {
             ActiveSpeaker = Find(speakerId, kind);
             // Explicit turn ownership: no previous/other Animator or AudioSource may
             // remain in a speaking state while this panel member has the floor.
             foreach (var member in Members)
                 if (member && member != ActiveSpeaker) member.StopSpeaking();
-            if (ActiveSpeaker) yield return ActiveSpeaker.Speak(api, line, tone);
+            if (ActiveSpeaker) yield return ActiveSpeaker.Speak(api, line, tone, speechStarted);
             else
             {
-                float end = Time.realtimeSinceStartup + Mathf.Clamp(1.3f + line.Length * 0.055f, 1.8f, 12f);
+                float fallbackSeconds = Mathf.Clamp(1.3f + line.Length * 0.12f, 1.8f, 12f);
+                speechStarted?.Invoke(fallbackSeconds);
+                float end = Time.realtimeSinceStartup + fallbackSeconds;
                 while (Time.realtimeSinceStartup < end) yield return null;
             }
             ActiveSpeaker = null;
@@ -59,7 +63,7 @@ namespace SpeakUpXR
             if (Members == null || Members.Length == 0) return;
             for (int tries = 0; tries < Members.Length; tries++)
             {
-                var member = Members[Random.Range(0, Members.Length)];
+                var member = Members[UnityEngine.Random.Range(0, Members.Length)];
                 if (member) { member.Nod(); return; }
             }
         }

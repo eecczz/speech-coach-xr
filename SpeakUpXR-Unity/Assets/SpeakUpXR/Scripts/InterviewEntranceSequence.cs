@@ -28,6 +28,7 @@ namespace SpeakUpXR
         private void Awake()
         {
             if (Door) _doorClosed = Door.localRotation;
+            PlayerAvatar?.PrepareEntrancePose(EntrancePoint, SeatPoint);
         }
 
         private void Start()
@@ -40,7 +41,7 @@ namespace SpeakUpXR
         private IEnumerator Run()
         {
             if ((!XrOrigin && !PlayerAvatar) || !EntrancePoint || !SeatPoint) { Finished?.Invoke(); yield break; }
-            if (!PlayerAvatar) XrOrigin.SetPositionAndRotation(EntrancePoint.position, EntrancePoint.rotation);
+            if (!PlayerAvatar) XrOrigin.position = EntrancePoint.position;
             // Door and candidate start together. Waiting for the entire door animation
             // used to leave the candidate standing still before the walk began.
             if (Door) StartCoroutine(RotateDoor(_doorClosed, _doorClosed * Quaternion.Euler(DoorOpenEuler), DoorOpenSeconds));
@@ -52,16 +53,15 @@ namespace SpeakUpXR
             }
 
             Vector3 from = EntrancePoint.position;
-            Quaternion fromRot = EntrancePoint.rotation;
             float elapsed = 0f;
             while (elapsed < WalkSeconds)
             {
                 elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / WalkSeconds));
-                XrOrigin.SetPositionAndRotation(Vector3.Lerp(from, SeatPoint.position, t), Quaternion.Slerp(fromRot, SeatPoint.rotation, t));
+                XrOrigin.position = Vector3.Lerp(from, SeatPoint.position, t);
                 yield return null;
             }
-            XrOrigin.SetPositionAndRotation(SeatPoint.position, SeatPoint.rotation);
+            XrOrigin.position = SeatPoint.position;
             float end = Time.realtimeSinceStartup + GreetingPauseSeconds;
             while (Time.realtimeSinceStartup < end) yield return null;
             Finished?.Invoke();

@@ -242,6 +242,7 @@ namespace SpeakUpXR.Editor
                 DisableUnusedConvaiCharacters(interview, installedCharacters, characterType);
                 string managerStatus = ConfigureManager(interview, installedCharacters);
                 report.Add(managerStatus);
+                report.Add(NormalizeRuntimeCameras(interview));
                 report.Add(NormalizeAudioListeners(interview));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(ReportPath) ?? "Assets/SpeakUpXR/UI");
@@ -554,6 +555,35 @@ namespace SpeakUpXR.Editor
                 EditorUtility.SetDirty(listener);
             }
             return $"AudioListenersActive: {listeners.Count(listener => listener.enabled)}; TotalFound={listeners.Count}";
+        }
+
+        private static string NormalizeRuntimeCameras(Scene scene)
+        {
+            List<Camera> cameras = scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Camera>(true))
+                .Where(camera => camera)
+                .ToList();
+            FirstPersonAvatarController player = FindComponent<FirstPersonAvatarController>(scene);
+            Camera xrCamera = player ? player.HeadCamera : null;
+            int disabledPreviewCameras = 0;
+
+            foreach (Camera camera in cameras)
+            {
+                if (camera == xrCamera)
+                {
+                    camera.enabled = true;
+                    camera.gameObject.tag = "MainCamera";
+                    continue;
+                }
+
+                if (camera.name != "Convai Orbit Camera") continue;
+                GameObject previewCamera = camera.gameObject;
+                UnityEngine.Object.DestroyImmediate(previewCamera);
+                disabledPreviewCameras++;
+            }
+
+            return $"RuntimeCamera: {(xrCamera ? xrCamera.name : "NOT_FOUND")}; " +
+                   $"DisabledConvaiOrbitCameras={disabledPreviewCameras}";
         }
 
         private static void ConfigureCharacter(Component character, string id, string displayName)

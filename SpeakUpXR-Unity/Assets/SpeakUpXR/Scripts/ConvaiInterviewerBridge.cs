@@ -122,7 +122,7 @@ namespace SpeakUpXR
                 : "로컬 ConvaiCharacter가 없어 기존 Coach TTS로 안전하게 대체됩니다.";
         }
 
-        public IEnumerator SpeakExact(string text, string tone, Action<bool> completed)
+        public IEnumerator SpeakExact(string text, string tone, Action<bool> completed, Action<float> speechStarted = null)
         {
             AutoBind();
             if (!UseConvaiSpeech || convaiCharacter == null || string.IsNullOrWhiteSpace(text))
@@ -195,6 +195,7 @@ namespace SpeakUpXR
                 yield break;
             }
 
+            speechStarted?.Invoke(EstimateSpeechSeconds(text));
             completed?.Invoke(true);
             float stopDeadline = Time.realtimeSinceStartup + SpeechStopTimeoutSeconds;
             float silentSince = -1f;
@@ -222,6 +223,9 @@ namespace SpeakUpXR
                 ? $"{CharacterName}: Convai 음성·립싱크 턴 완료."
                 : $"{CharacterName}: Convai 음성 종료 시간 초과로 제스처를 정리했습니다.";
         }
+
+        private static float EstimateSpeechSeconds(string text) =>
+            Mathf.Clamp(0.55f + (text?.Length ?? 0) / 6.2f, 1.2f, 14f);
 
         private void Subscribe()
         {
