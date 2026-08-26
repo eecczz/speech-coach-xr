@@ -30080,7 +30080,7 @@ GameObject:
   - component: {fileID: 575911423}
   - component: {fileID: 575911422}
   m_Layer: 0
-  m_Name: FeedbackDialogue_TOP_LEFT
+  m_Name: FeedbackDialogue_TOP_RIGHT
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -30118,12 +30118,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   OverlayWithoutXr: 1
-  DesktopAnchor: {x: 0, y: 1}
-  DesktopPivot: {x: 0, y: 1}
-  DesktopPosition: {x: 300, y: -36}
+  DesktopAnchor: {x: 1, y: 1}
+  DesktopPivot: {x: 1, y: 1}
+  DesktopPosition: {x: -36, y: -36}
   DesktopSize: {x: 720, y: 190}
   AttachToHeadInXr: 1
-  XrLocalPosition: {x: -0.1, y: 0.16, z: 0.76}
+  XrLocalPosition: {x: 0.24, y: 0.16, z: 0.76}
   XrLocalEuler: {x: 0, y: 0, z: 0}
   XrWorldScale: 0.00055
 --- !u!225 &575911424
@@ -53224,6 +53224,7 @@ GameObject:
   - component: {fileID: 1391208146}
   - component: {fileID: 1391208145}
   - component: {fileID: 1391208144}
+  - component: {fileID: 1391208148}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -53392,7 +53393,7 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.05
+  near clip plane: 0.02
   far clip plane: 1000
   field of view: 72
   orthographic: 0
@@ -53412,6 +53413,25 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &1391208148
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1391208142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1f42b2554c9ff74ba783172fe66b8b7, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: ''
+  HeadCamera: {fileID: 1391208147}
+  Panel: {fileID: 1708693008}
+  ProbeRadius: 0.07
+  TargetPadding: 0.12
+  ObstructionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!1 &1391452202
 GameObject:
   m_ObjectHideFlags: 0
@@ -74886,7 +74906,7 @@ GameObject:
   m_Icon: {fileID: 2800000, guid: 11be21f3f1f4bac46a48d14a031f3d60, type: 3}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1923541768
 RectTransform:
   m_ObjectHideFlags: 0
@@ -79684,7 +79704,7 @@ GameObject:
   m_Icon: {fileID: 2800000, guid: 11be21f3f1f4bac46a48d14a031f3d60, type: 3}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2033003619
 RectTransform:
   m_ObjectHideFlags: 0

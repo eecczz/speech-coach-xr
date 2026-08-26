@@ -195,7 +195,7 @@ namespace SpeakUpXR
             }
             HeadCamera.transform.localPosition = Vector3.zero;
             HeadCamera.transform.localRotation = Quaternion.identity;
-            HeadCamera.nearClipPlane = 0.05f;
+            HeadCamera.nearClipPlane = 0.02f;
             HeadCamera.fieldOfView = FieldOfView;
         }
 

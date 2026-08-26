@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -14,6 +15,16 @@ namespace SpeakUpXR
     /// </summary>
     public class InterviewSession : MonoBehaviour
     {
+        [Serializable]
+        private sealed class SavedInterviewReport
+        {
+            public string session_id;
+            public string generated_at_utc;
+            public InterviewConfig config;
+            public QAExchange[] history;
+            public InterviewReportResponse report;
+        }
+
         [Header("Scene references")]
         public CoachApi Api;
         public InterviewerPanel Panel;
@@ -322,7 +333,11 @@ namespace SpeakUpXR
                 if (Api)
                     yield return Api.Report(
                     new InterviewReportRequest { config = Config, history = _history.ToArray() },
-                    value => report = value,
+                    value =>
+                    {
+                        if (IsUsefulReport(value)) report = value;
+                        else error = "리포트 응답에 요약·평가 본문이 없습니다.";
+                    },
                     value => error = value);
                 if (report == null)
                 {
@@ -333,9 +348,40 @@ namespace SpeakUpXR
             }
 
             SetState(SessionState.Done);
+            SaveReport(report);
             Hud?.SetStatus("리포트가 준비되었습니다", HudTone.Done);
             ReportView?.ShowReport(report, _history.ToArray());
             OnFinished?.Invoke(_history, report);
+        }
+
+        private static bool IsUsefulReport(InterviewReportResponse report) =>
+            report != null &&
+            (!string.IsNullOrWhiteSpace(report.overall_summary) ||
+             report.strengths?.Length > 0 || report.improvements?.Length > 0 ||
+             report.per_question?.Length > 0);
+
+        private void SaveReport(InterviewReportResponse report)
+        {
+            try
+            {
+                string directory = Path.Combine(Application.persistentDataPath, "InterviewReports");
+                Directory.CreateDirectory(directory);
+                string path = Path.Combine(directory, $"interview-report-{_sessionId}.json");
+                var saved = new SavedInterviewReport
+                {
+                    session_id = _sessionId,
+                    generated_at_utc = DateTime.UtcNow.ToString("O"),
+                    config = Config,
+                    history = _history.ToArray(),
+                    report = report,
+                };
+                File.WriteAllText(path, JsonUtility.ToJson(saved, true));
+                Debug.Log($"[SpeakUpXR Report] 저장 완료: {path}");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[SpeakUpXR Report] 리포트 저장 실패: " + exception.Message);
+            }
         }
 
         private IEnumerator Speak(string line, string speakerId, string kind, string tone)

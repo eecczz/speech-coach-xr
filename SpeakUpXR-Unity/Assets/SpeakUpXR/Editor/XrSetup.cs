@@ -1,7 +1,7 @@
 // Editor automation for XR + Android player configuration (batchmode-friendly).
 //   Configure : OpenXR loader on Android + Meta Quest Support / Touch profile features
 //               + Quest-appropriate player settings (IL2CPP, ARM64, Vulkan, ASTC).
-//   BuildApk  : builds the Interview scene into Builds/SpeakUpXR.apk.
+//   BuildApk  : builds MainMenu -> Interview into Builds/SpeakUpXR.apk.
 
 using System.IO;
 using System.Linq;
@@ -130,7 +130,11 @@ public static class XrSetup
     {
         System.IO.Directory.CreateDirectory("Builds");
         var report = BuildPipeline.BuildPlayer(
-            new[] { "Assets/SpeakUpXR/Scenes/Interview.unity" },
+            new[]
+            {
+                "Assets/SpeakUpXR/Scenes/MainMenu.unity",
+                "Assets/SpeakUpXR/Scenes/Interview.unity",
+            },
             "Builds/SpeakUpXR.apk",
             BuildTarget.Android,
             BuildOptions.None);

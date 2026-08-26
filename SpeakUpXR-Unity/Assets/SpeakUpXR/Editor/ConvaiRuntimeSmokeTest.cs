@@ -58,13 +58,14 @@ namespace SpeakUpXR.Editor
         {
             if (change == UnityEditor.PlayModeStateChange.EnteredPlayMode)
             {
+                if (!UnityEditor.SessionState.GetBool(RunningKey, false)) return;
                 _enteredAt = EditorApplication.timeSinceStartup;
                 EditorApplication.update += Tick;
             }
             else if (change == UnityEditor.PlayModeStateChange.EnteredEditMode)
             {
                 EditorApplication.update -= Tick;
-                EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+                if (!UnityEditor.SessionState.GetBool(RunningKey, false)) return;
                 string result = UnityEditor.SessionState.GetString(ResultKey, "");
                 if (string.IsNullOrWhiteSpace(result)) result = "Status: STOPPED_WITHOUT_RESULT";
                 Directory.CreateDirectory(Path.GetDirectoryName(ReportPath) ?? "Assets/SpeakUpXR/UI");
@@ -73,6 +74,7 @@ namespace SpeakUpXR.Editor
                     $"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" + result + "\n");
                 AssetDatabase.ImportAsset(ReportPath, ImportAssetOptions.ForceUpdate);
                 UnityEditor.SessionState.SetBool(RunningKey, false);
+                UnityEditor.SessionState.SetBool(SentKey, false);
                 Debug.Log("[SpeakUpXR] Convai 한국어 음성·Viseme 런타임 시험이 끝났습니다. " + result);
             }
         }

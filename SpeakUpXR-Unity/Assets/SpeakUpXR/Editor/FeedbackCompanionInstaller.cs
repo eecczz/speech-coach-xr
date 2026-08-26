@@ -19,7 +19,7 @@ namespace SpeakUpXR.Editor
         private const string ClipPath = "Assets/Stylized3DMonster/Monster40/Monster38_Idle01.anim";
         private const string ControllerPath = "Assets/SpeakUpXR/Animations/FeedbackMonster.controller";
         private const string ReportPath = "Assets/SpeakUpXR/UI/feedback-companion-install-v1.txt";
-        private const int Revision = 1;
+        private const int Revision = 2;
 
         [InitializeOnLoadMethod]
         private static void Schedule() => EditorApplication.delayCall += InstallIfNeeded;
@@ -95,6 +95,9 @@ namespace SpeakUpXR.Editor
                 }
 
                 if (!companion.DialogueHud) BuildDialogue(scene, companion);
+                ConfigureDialogue(companion);
+                DisableUnrequestedConvaiUi(scene);
+                EnsureCameraVisibilityGuard(player, session);
                 session.FeedbackCompanion = companion;
                 feedback.Companion = companion;
                 foreach (ConvaiInterviewerBridge bridge in Resources.FindObjectsOfTypeAll<ConvaiInterviewerBridge>()
@@ -120,6 +123,9 @@ namespace SpeakUpXR.Editor
                     $"LocalOffset: {companion.LocalOffset}",
                     "FeedbackTTS: DISABLED",
                     "TypewriterDialogue: ENABLED",
+                    "DialoguePosition: TOP_RIGHT",
+                    "ConvaiSampleTranscriptUI: DISABLED",
+                    "CameraOcclusionGuard: ENABLED",
                     "SceneAuthored: YES",
                 });
                 AssetDatabase.ImportAsset(ReportPath, ImportAssetOptions.ForceUpdate);
@@ -140,7 +146,7 @@ namespace SpeakUpXR.Editor
 
         private static void BuildDialogue(Scene scene, FeedbackCompanionController companion)
         {
-            var canvasObject = new GameObject("FeedbackDialogue_TOP_LEFT", typeof(RectTransform), typeof(Canvas),
+            var canvasObject = new GameObject("FeedbackDialogue_TOP_RIGHT", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup), typeof(AdaptiveWorldCanvas));
             SceneManager.MoveGameObjectToScene(canvasObject, scene);
             var canvas = canvasObject.GetComponent<Canvas>();
@@ -148,12 +154,12 @@ namespace SpeakUpXR.Editor
             canvas.overrideSorting = true;
             canvas.sortingOrder = 1100;
             var adaptive = canvasObject.GetComponent<AdaptiveWorldCanvas>();
-            adaptive.DesktopAnchor = new Vector2(0f, 1f);
-            adaptive.DesktopPivot = new Vector2(0f, 1f);
-            adaptive.DesktopPosition = new Vector2(300f, -36f);
+            adaptive.DesktopAnchor = new Vector2(1f, 1f);
+            adaptive.DesktopPivot = new Vector2(1f, 1f);
+            adaptive.DesktopPosition = new Vector2(-36f, -36f);
             adaptive.DesktopSize = new Vector2(720f, 190f);
             adaptive.AttachToHeadInXr = true;
-            adaptive.XrLocalPosition = new Vector3(-0.10f, 0.16f, 0.76f);
+            adaptive.XrLocalPosition = new Vector3(0.24f, 0.16f, 0.76f);
             adaptive.XrLocalEuler = Vector3.zero;
             adaptive.XrWorldScale = 0.00055f;
 
@@ -177,6 +183,50 @@ namespace SpeakUpXR.Editor
             companion.DialogueHud = hud;
             companion.DialogueGroup = canvasObject.GetComponent<CanvasGroup>();
             companion.DialogueGroup.alpha = 0f;
+        }
+
+        private static void ConfigureDialogue(FeedbackCompanionController companion)
+        {
+            if (!companion.DialogueHud) return;
+            GameObject canvasObject = companion.DialogueHud.gameObject;
+            canvasObject.name = "FeedbackDialogue_TOP_RIGHT";
+            AdaptiveWorldCanvas adaptive = canvasObject.GetComponent<AdaptiveWorldCanvas>();
+            if (!adaptive) adaptive = canvasObject.AddComponent<AdaptiveWorldCanvas>();
+            adaptive.DesktopAnchor = new Vector2(1f, 1f);
+            adaptive.DesktopPivot = new Vector2(1f, 1f);
+            adaptive.DesktopPosition = new Vector2(-36f, -36f);
+            adaptive.DesktopSize = new Vector2(720f, 190f);
+            adaptive.AttachToHeadInXr = true;
+            adaptive.XrLocalPosition = new Vector3(0.24f, 0.16f, 0.76f);
+            adaptive.XrLocalEuler = Vector3.zero;
+            adaptive.XrWorldScale = 0.00055f;
+            EditorUtility.SetDirty(adaptive);
+            EditorUtility.SetDirty(canvasObject);
+        }
+
+        private static void DisableUnrequestedConvaiUi(Scene scene)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            foreach (Transform item in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (item.name != "TranscriptUI_Chat") continue;
+                item.gameObject.SetActive(false);
+                EditorUtility.SetDirty(item.gameObject);
+            }
+        }
+
+        private static void EnsureCameraVisibilityGuard(
+            FirstPersonAvatarController player, InterviewSession session)
+        {
+            if (!player || !player.HeadCamera) return;
+            InterviewCameraOcclusionGuard guard =
+                player.HeadCamera.GetComponent<InterviewCameraOcclusionGuard>() ??
+                player.HeadCamera.gameObject.AddComponent<InterviewCameraOcclusionGuard>();
+            guard.HeadCamera = player.HeadCamera;
+            guard.Panel = session ? session.Panel : null;
+            player.HeadCamera.nearClipPlane = 0.02f;
+            EditorUtility.SetDirty(guard);
+            EditorUtility.SetDirty(player.HeadCamera);
         }
 
         private static GameObject CreateUi(string name, Transform parent, Vector2 position, Vector2 size)

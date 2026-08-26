@@ -18,6 +18,7 @@ namespace SpeakUpXR
         public GameObject FaceRoot;
         [Range(0.5f, 2f)] public float Strength = 1f;
         [Range(4f, 30f)] public float Response = 18f;
+        [Range(4f, 24f)] public float JawOpenDegrees = 13f;
 
         private readonly List<VisemeTarget> _targets = new();
         private readonly float[] _samples = new float[128];
@@ -29,6 +30,8 @@ namespace SpeakUpXR
         private string _expression = "neutral";
         private float _expressionWeight;
         private float _expressionTarget;
+        private Transform _jawBone;
+        private Quaternion _jawBaseRotation;
 
         private sealed class VisemeTarget
         {
@@ -72,6 +75,7 @@ namespace SpeakUpXR
             _expressionWeight = 0f;
             _envelope = 0f;
             _localDriving = false;
+            ResetJaw();
         }
 
         [ContextMenu("얼굴 립싱크 대체 드라이버 다시 연결")]
@@ -87,8 +91,23 @@ namespace SpeakUpXR
             _expressionTarget = 0f;
             _expression = "neutral";
             _targets.Clear();
+            _jawBone = null;
             if (FaceRoot)
             {
+                Animator animator = FaceRoot.GetComponentInChildren<Animator>(true);
+                if (animator && animator.isHuman)
+                    _jawBone = animator.GetBoneTransform(HumanBodyBones.Jaw);
+                if (!_jawBone)
+                {
+                    foreach (Transform item in FaceRoot.GetComponentsInChildren<Transform>(true))
+                    {
+                        string key = item.name.Replace("_", "").ToLowerInvariant();
+                        if (!key.Contains("jaw") || key.Contains("jawend")) continue;
+                        _jawBone = item;
+                        break;
+                    }
+                }
+                if (_jawBone) _jawBaseRotation = _jawBone.localRotation;
                 foreach (SkinnedMeshRenderer renderer in FaceRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                 {
                     Mesh mesh = renderer.sharedMesh;
@@ -153,7 +172,7 @@ namespace SpeakUpXR
 
         private void LateUpdate()
         {
-            if (!Owner || !FaceRoot || _targets.Count == 0) return;
+            if (!Owner || !FaceRoot || (_targets.Count == 0 && !_jawBone)) return;
             bool speaking = Owner.IsSpeaking;
             bool remoteFace = Owner.ConvaiBridge && Owner.ConvaiBridge.IsRemoteSpeaking;
             _expressionWeight = Mathf.MoveTowards(
@@ -196,7 +215,8 @@ namespace SpeakUpXR
             if (!_reported)
             {
                 _reported = true;
-                Debug.Log($"[SpeakUpXR LipSync] {Owner.DisplayName}: local facial-viseme fallback active; targets={_targets.Count}");
+                Debug.Log($"[SpeakUpXR LipSync] {Owner.DisplayName}: local facial fallback active; " +
+                          $"blendshapeTargets={_targets.Count}; jaw={(_jawBone ? _jawBone.name : "none")}");
             }
         }
 
@@ -270,6 +290,14 @@ namespace SpeakUpXR
                 target.ObservedRound = target.LastRound;
                 target.ObservedInitialized = true;
             }
+            if (_jawBone)
+                _jawBone.localRotation = _jawBaseRotation *
+                                         Quaternion.Euler(0f, 0f, -Mathf.Clamp01(open) * JawOpenDegrees);
+        }
+
+        private void ResetJaw()
+        {
+            if (_jawBone) _jawBone.localRotation = _jawBaseRotation;
         }
 
         private void ApplyExpression(float weight)
